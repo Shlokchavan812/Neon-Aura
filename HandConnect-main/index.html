@@ -1,0 +1,2796 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEON VISION AR</title>
+    
+    <!-- MediaPipe Hands CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        :root {
+            --bg-color: #050510;
+            --text-color: #ffffff;
+            --glass-bg: rgba(20, 25, 40, 0.4);
+            --glass-border: rgba(255, 255, 255, 0.15);
+            --glass-blur: blur(16px);
+            --accent: #00ffcc;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            overflow: hidden;
+        }
+
+        .video-container {
+            position: absolute;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        .input_video {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror */
+            z-index: 0; /* Let the raw camera sit behind */
+            filter: brightness(0.6) contrast(1.1); /* Subtle dark to make neon pop */
+        }
+
+        /* 
+         * Background Canvas captures the video frame and applies the matrix rain/starfield 
+         */
+        #bgCanvas, #mainCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1); /* Mirror */
+        }
+        
+        #bgCanvas {
+            z-index: 1;
+            pointer-events: none;
+        }
+
+        #mainCanvas {
+            z-index: 5;
+            pointer-events: none;
+            /* We use mix-blend-mode for the glowing effects in canvas */
+        }
+
+        /* UI Overlays */
+        #hud {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            pointer-events: none;
+        }
+
+        .panel {
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            -webkit-backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 15px 20px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        .stat {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: rgba(255, 255, 255, 0.8);
+            min-width: 180px;
+        }
+        .stat:last-child { margin-bottom: 0; }
+        .stat span.val { font-weight: bold; color: var(--accent); }
+
+        .music-panel {
+            min-width: 320px;
+        }
+
+        .track-title {
+            display: block;
+            max-width: 280px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            text-align: right;
+        }
+
+        .player-progress {
+            width: 100%;
+            margin: 10px 0 6px;
+            accent-color: var(--accent);
+            pointer-events: auto;
+        }
+
+        .player-times {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.78rem;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .file-picker {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 10px 12px;
+            margin-bottom: 12px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px dashed rgba(255, 255, 255, 0.25);
+            border-radius: 8px;
+            color: white;
+            cursor: pointer;
+            transition: 0.3s ease;
+        }
+
+        .file-picker:hover {
+            border-color: var(--accent);
+            background: rgba(255, 255, 255, 0.14);
+        }
+
+        .visually-hidden {
+            position: absolute;
+            width: 1px;
+            height: 1px;
+            padding: 0;
+            margin: -1px;
+            overflow: hidden;
+            clip: rect(0, 0, 0, 0);
+            white-space: nowrap;
+            border: 0;
+        }
+
+        .playlist-select {
+            min-height: 110px;
+            margin-bottom: 12px;
+        }
+
+        .player-button-row {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(0, 1fr));
+            gap: 8px;
+        }
+
+        .player-btn {
+            padding: 8px 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            background: rgba(255, 255, 255, 0.08);
+            color: white;
+            cursor: pointer;
+            transition: 0.25s ease;
+        }
+
+        .player-btn:hover:not(:disabled),
+        .player-btn.active {
+            border-color: var(--accent);
+            background: rgba(0, 255, 204, 0.14);
+        }
+
+        .player-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        /* Themes */
+        #themes {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 10;
+            display: flex;
+            gap: 10px;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 30px;
+            padding: 8px;
+            transition: opacity 0.5s;
+        }
+
+        .theme-btn {
+            background: transparent;
+            border: 1px solid transparent;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: 0.3s ease;
+            font-weight: 500;
+        }
+        
+        .theme-btn.active {
+            background: rgba(255,255,255,0.15);
+            border-color: rgba(255,255,255,0.3);
+            text-shadow: 0 0 10px white;
+        }
+
+        /* Start Overlay */
+        #startOverlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            transition: opacity 0.5s ease;
+        }
+
+        .start-btn {
+            padding: 16px 40px;
+            font-size: 1.2rem;
+            background: linear-gradient(45deg, #ff00cc, #3333ff);
+            border: none;
+            color: white;
+            border-radius: 30px;
+            cursor: pointer;
+            box-shadow: 0 0 20px rgba(255, 0, 204, 0.5);
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            transition: transform 0.2s;
+        }
+        .start-btn:hover { transform: scale(1.05); }
+
+        .hidden { opacity: 0; pointer-events: none; }
+
+        /* Settings Panel */
+        #settingsPanel {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 10;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 20px;
+            width: 280px;
+            max-height: 90vh;
+            overflow-y: auto;
+        }
+
+        .settings-group {
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            padding-bottom: 15px;
+        }
+
+        .settings-group:last-child {
+            border-bottom: none;
+        }
+
+        .setting-label {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            color: rgba(255,255,255,0.8);
+        }
+
+        .setting-input {
+            width: 100%;
+            padding: 6px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.2);
+            border-radius: 6px;
+            color: white;
+            font-size: 0.85rem;
+        }
+
+        .setting-input:focus {
+            outline: none;
+            border-color: var(--accent);
+            box-shadow: 0 0 10px rgba(0, 255, 204, 0.3);
+        }
+
+        .toggle-btn {
+            display: inline-block;
+            width: 40px;
+            height: 24px;
+            background: rgba(255,255,255,0.2);
+            border: 1px solid rgba(255,255,255,0.3);
+            border-radius: 12px;
+            cursor: pointer;
+            position: relative;
+            transition: 0.3s;
+        }
+
+        .toggle-btn.active {
+            background: var(--accent);
+        }
+
+        .toggle-btn::after {
+            content: '';
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            top: 2px;
+            left: 2px;
+            transition: 0.3s;
+        }
+
+        .toggle-btn.active::after {
+            left: 18px;
+        }
+
+        /* Performance Monitor */
+        #perfMonitor {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            z-index: 9;
+            background: var(--glass-bg);
+            backdrop-filter: var(--glass-blur);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 15px 20px;
+            font-size: 0.8rem;
+            color: var(--accent);
+            min-width: 150px;
+            display: none;
+        }
+
+        .perf-stat {
+            margin-bottom: 6px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .perf-stat.warning { color: #ffaa00; }
+        .perf-stat.critical { color: #ff3333; }
+
+        /* Help Overlay */
+        #helpOverlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0,0,0,0.95);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            backdrop-filter: blur(10px);
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .help-content {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: 12px;
+            padding: 40px;
+            max-width: 600px;
+            color: white;
+        }
+
+        .help-content h2 {
+            margin-bottom: 20px;
+            color: var(--accent);
+        }
+
+        .help-section {
+            margin-bottom: 20px;
+        }
+
+        .help-section h3 {
+            font-size: 0.95rem;
+            color: var(--accent);
+            margin-bottom: 10px;
+        }
+
+        .help-shortcut {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            font-size: 0.85rem;
+            padding: 8px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 6px;
+        }
+
+        .help-key {
+            background: rgba(255,255,255,0.1);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-family: monospace;
+            font-weight: bold;
+        }
+
+        .close-help {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 2rem;
+            cursor: pointer;
+        }
+
+        /* Settings Toggle */
+        .panel-toggle {
+            background: transparent;
+            border: 1px solid var(--glass-border);
+            color: white;
+            padding: 8px 16px;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: 0.3s ease;
+            font-weight: 500;
+            font-size: 0.85rem;
+        }
+
+        .panel-toggle:hover {
+            background: rgba(255,255,255,0.1);
+            border-color: var(--accent);
+        }
+
+        /* Trail Canvas */
+        #trailCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 3;
+            pointer-events: none;
+            transform: scaleX(-1);
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Start Overlay (Required for AudioContext initialization) -->
+    <div id="startOverlay">
+        <h1 style="margin-bottom: 20px; font-weight: 300; letter-spacing: 4px;">NEON AURA AR</h1>
+        <p style="margin-bottom: 40px; color: #888; max-width: 560px; text-align: center;">Grant camera permission, then use the demo tracks or add your own songs from Settings to control playback with gestures.</p>
+        <button class="start-btn" id="startBtn">Enter Experience</button>
+    </div>
+
+    <div class="video-container">
+        <video class="input_video" autoplay playsinline></video>
+        <canvas id="bgCanvas"></canvas>
+        <canvas id="trailCanvas"></canvas>
+        <canvas id="mainCanvas"></canvas>
+    </div>
+
+    <!-- UI Overlay -->
+    <div id="hud" class="hidden">
+        <div class="panel">
+            <div class="stat">Hands Detected: <span class="val" id="ui-hands">0</span></div>
+            <div class="stat">FPS: <span class="val" id="ui-fps">0</span></div>
+        </div>
+        <div class="panel">
+            <div class="stat">Gesture: <span class="val" id="ui-gesture">None</span></div>
+            <div class="stat">Spread: <span class="val" id="ui-spread">0%</span></div>
+        </div>
+        <div class="panel music-panel">
+            <div class="stat">Track: <span class="val track-title" id="ui-track">No track loaded</span></div>
+            <div class="stat">Playback: <span class="val" id="ui-playback">Idle</span></div>
+            <div class="stat">Volume: <span class="val" id="ui-volume">50%</span></div>
+            <input type="range" class="player-progress" id="trackProgress" min="0" max="0" step="0.1" value="0" disabled>
+            <div class="player-times">
+                <span id="ui-current-time">0:00</span>
+                <span id="ui-duration">0:00</span>
+            </div>
+        </div>
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button class="panel-toggle" id="settingsToggle" title="Settings (S)">⚙️</button>
+            <button class="panel-toggle" id="fullscreenToggle" title="Fullscreen (F)">⛶</button>
+            <button class="panel-toggle" id="helpToggle" title="Help (H)">?</button>
+        </div>
+    </div>
+
+    <div id="themes" class="hidden">
+        <button class="theme-btn active" data-theme="Rainbow">Rainbow</button>
+        <button class="theme-btn" data-theme="Cyberpunk">Cyberpunk</button>
+        <button class="theme-btn" data-theme="Lava">Lava</button>
+        <button class="theme-btn" data-theme="Ocean">Ocean</button>
+        <button class="theme-btn" data-theme="Galaxy">Galaxy</button>
+    </div>
+
+    <!-- Settings Panel -->
+    <div id="settingsPanel" class="hidden">
+        <h3 style="margin-bottom: 15px; color: var(--accent);">⚙️ Settings</h3>
+        
+        <div class="settings-group">
+            <div class="setting-label">
+                <span>Particles</span>
+                <div class="toggle-btn active" data-setting="particlesEnabled"></div>
+            </div>
+            <div class="setting-label">
+                Particle Count: <span id="particleCountVal">50</span>
+            </div>
+            <input type="range" class="setting-input" id="particleCount" min="10" max="200" value="50" style="width: 100%;">
+        </div>
+
+        <div class="settings-group">
+            <div class="setting-label">
+                <span>Trails</span>
+                <div class="toggle-btn active" data-setting="trailsEnabled"></div>
+            </div>
+            <div class="setting-label">
+                Trail Length: <span id="trailLengthVal">30</span>
+            </div>
+            <input type="range" class="setting-input" id="trailLength" min="5" max="50" value="30" style="width: 100%;">
+        </div>
+
+        <div class="settings-group">
+            <div class="setting-label">
+                <span>Audio Volume</span>
+            </div>
+            <input type="range" class="setting-input" id="audioVolume" min="0" max="100" value="50" style="width: 100%;">
+        </div>
+
+        <div class="settings-group">
+            <div class="setting-label">
+                <span>Hand Smoothing</span>
+            </div>
+            <input type="range" class="setting-input" id="handSmoothing" min="0" max="1" step="0.1" value="0.7" style="width: 100%;">
+        </div>
+
+        <div class="settings-group">
+            <div class="setting-label">
+                <span>Performance Monitor</span>
+                <div class="toggle-btn" data-setting="perfMonitorEnabled"></div>
+            </div>
+        </div>
+
+        <div class="settings-group">
+            <div class="setting-label">
+                <span>Finger Notes Audio</span>
+                <div class="toggle-btn active" data-setting="fingerNotesEnabled"></div>
+            </div>
+        </div>
+
+        <div class="settings-group">
+            <div class="setting-label">
+                <span>Music Library</span>
+            </div>
+            <p style="margin-bottom: 10px; font-size: 0.8rem; color: rgba(255,255,255,0.72);">Three demo tracks are preloaded. Use this to add your own `mp3`, `wav`, or `m4a` files to the playlist.</p>
+            <label class="file-picker" for="playlistInput">Add your audio files</label>
+            <input type="file" id="playlistInput" class="visually-hidden" accept="audio/*" multiple>
+            <select id="playlistSelect" class="setting-input playlist-select" size="5">
+                <option>No tracks loaded</option>
+            </select>
+            <div class="player-button-row">
+                <button class="player-btn" id="prevTrackBtn" type="button" disabled>Prev</button>
+                <button class="player-btn" id="playPauseBtn" type="button" disabled>Play</button>
+                <button class="player-btn" id="nextTrackBtn" type="button" disabled>Next</button>
+                <button class="player-btn" id="muteToggleBtn" type="button" disabled>Mute</button>
+                <button class="player-btn" id="loopToggleBtn" type="button" disabled>Loop</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Monitor -->
+    <div id="perfMonitor">
+        <div class="perf-stat"><span>FPS:</span> <span id="perf-fps">0</span></div>
+        <div class="perf-stat"><span>Frame:</span> <span id="perf-frame">0</span>ms</div>
+        <div class="perf-stat"><span>Particles:</span> <span id="perf-particles">0</span></div>
+        <div class="perf-stat"><span>Memory:</span> <span id="perf-memory">0</span>MB</div>
+    </div>
+
+    <!-- Help Overlay -->
+    <div id="helpOverlay" class="hidden">
+        <button class="close-help" onclick="toggleHelp()">×</button>
+        <div class="help-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
+            <h2>🎮 Complete Gesture Guide</h2>
+            
+            <div class="help-section">
+                <h3>⚡ Basic Gestures</h3>
+                <div class="help-shortcut">
+                    <span>Pinch</span>
+                    <span>→ Thumb + Index touch</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Fist</span>
+                    <span>→ All fingers closed</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Open Hand</span>
+                    <span>→ All fingers extended</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Thumbs Up</span>
+                    <span>→ Thumb pointing up</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Thumbs Down</span>
+                    <span>→ Thumb pointing down</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>OK Sign</span>
+                    <span>→ Thumb+Index circle</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>🎮 Rock-Paper-Scissors</h3>
+                <div class="help-shortcut">
+                    <span>Rock</span>
+                    <span>→ Closed fist</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Paper</span>
+                    <span>→ All fingers extended</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Scissors</span>
+                    <span>→ Index+Middle spread</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>🎉 Celebratory Gestures</h3>
+                <div class="help-shortcut">
+                    <span>Victory/Peace</span>
+                    <span>→ V-shape with 2 fingers</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Three Fingers</span>
+                    <span>→ Index+Middle+Ring</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Four Fingers</span>
+                    <span>→ All 4 fingers extended</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>🖖 Advanced Shapes</h3>
+                <div class="help-shortcut">
+                    <span>Spock</span>
+                    <span>→ Star Trek V-shape</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Love/Heart</span>
+                    <span>→ Thumb+Pinky+Index extended</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Claw</span>
+                    <span>→ All fingers wide spread</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Holy Sign</span>
+                    <span>→ Index+Middle wide apart</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Gun</span>
+                    <span>→ Thumb+Index only</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>☝️ Pointing Gestures</h3>
+                <div class="help-shortcut">
+                    <span>Point Up</span>
+                    <span>→ Index only upward</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Point Right</span>
+                    <span>→ Index only rightward</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>🤝 Dual-Hand Gestures</h3>
+                <div class="help-shortcut">
+                    <span>Hands Touching</span>
+                    <span>→ Palms very close</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Hands Close</span>
+                    <span>→ Hands near each other</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Hands Crossing</span>
+                    <span>→ Hands overlapping</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>⌨️ Keyboard Shortcuts</h3>
+                <div class="help-shortcut">
+                    <span class="help-key">F</span>
+                    <span>→ Fullscreen</span>
+                </div>
+                <div class="help-shortcut">
+                    <span class="help-key">S</span>
+                    <span>→ Settings Panel</span>
+                </div>
+                <div class="help-shortcut">
+                    <span class="help-key">P</span>
+                    <span>→ Performance Monitor</span>
+                </div>
+                <div class="help-shortcut">
+                    <span class="help-key">R</span>
+                    <span>→ Reset Effects</span>
+                </div>
+                <div class="help-shortcut">
+                    <span class="help-key">H</span>
+                    <span>→ Show This Help</span>
+                </div>
+                <div class="help-shortcut">
+                    <span class="help-key">T</span>
+                    <span>→ Toggle HUD</span>
+                </div>
+                <div class="help-shortcut">
+                    <span class="help-key">M</span>
+                    <span>→ Mobile Mode</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>💡 Tips</h3>
+                <ul style="font-size: 0.85rem; padding-left: 20px; color: rgba(255,255,255,0.9);">
+                    <li>✅ Use clear, exaggerated gestures for best results</li>
+                    <li>✅ Ensure hands are fully visible in camera frame</li>
+                    <li>✅ Good lighting improves hand detection accuracy</li>
+                    <li>✅ Gestures have a 300ms cooldown to prevent re-triggering</li>
+                    <li>✅ Watch the HUD for real-time gesture feedback</li>
+                    <li>✅ Particles and haptics confirm gesture recognition</li>
+                    <li>✅ Two-hand gestures work when both hands are detected</li>
+                    <li>✅ See GESTURES.md for detailed documentation</li>
+                    <li>Load tracks in Settings, then use pinch, point, thumbs, OK, victory, and two-hand gestures for playback control</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <audio id="musicPlayer" preload="metadata"></audio>
+
+<script>
+/** 
+ * GLOBALS & CONFIG
+ */
+const videoElement = document.querySelector('.input_video');
+const bgCanvas = document.getElementById('bgCanvas');
+const mainCanvas = document.getElementById('mainCanvas');
+const trailCanvas = document.getElementById('trailCanvas');
+const bgCtx = bgCanvas.getContext('2d');
+const ctx = mainCanvas.getContext('2d');
+const trailCtx = trailCanvas.getContext('2d');
+
+let width = window.innerWidth;
+let height = window.innerHeight;
+
+let time = 0;
+let lastTime = performance.now();
+let framesThisSecond = 0;
+let lastFpsTime = performance.now();
+
+let currentHands = []; // Latest data from MediaPipe
+let handVelocities = 0; // Average hand movement speed
+
+// Theme Config
+let currentTheme = 'Rainbow';
+const themes = {
+    'Rainbow':   (t, index, total) => `hsl(${(t * 100 + index * (360/total)) % 360}, 100%, 60%)`,
+    'Cyberpunk': (t, index, total) => (index % 2 === 0) ? '#ff003c' : '#00f0ff',
+    'Lava':      (t, index, total) => `hsl(${(10 + (index * 10)) % 40}, 100%, ${50 + Math.sin(t)*10}%)`,
+    'Ocean':     (t, index, total) => `hsl(${180 + (index * 20)}, 100%, 60%)`,
+    'Galaxy':    (t, index, total) => `hsl(${260 + Math.sin(t*2 + index)*40}, 100%, 65%)`
+};
+
+// Physics Engines Data
+let particles = [];
+let ripples = [];
+const FINGER_TIPS = [4, 8, 12, 16, 20];
+
+// Trail System
+let handTrails = [[], []];
+const MAX_TRAIL_LENGTH = 30;
+
+// Previous hands for tracking dynamics
+let previousHands = [null, null];
+
+// Gesture tracking
+let settings = {
+    particlesEnabled: true,
+    particleCount: 50,
+    trailsEnabled: true,
+    trailLength: 30,
+    audioVolume: 0.5,
+    handSmoothing: 0.7,
+    perfMonitorEnabled: false,
+    fingerNotesEnabled: true,
+    isMobileMode: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+};
+
+let smoothedHands = [null, null];
+
+// Finger Notes Audio
+const fingerNotes = {
+    0: 130.81,  // C3 - Wrist
+    4: 164.81,  // E3 - Thumb
+    8: 196.00,  // G3 - Index
+    12: 246.94, // B3 - Middle
+    16: 329.63, // E4 - Ring
+    20: 392.00  // G4 - Pinky
+};
+
+let fingerOscillators = {};
+let fingerGains = {};
+
+// Performance Metrics
+let perfMetrics = {
+    fps: 0,
+    frameTime: 0,
+    particleCount: 0,
+    memory: 0
+};
+
+let lastMemoryCheck = 0;
+
+// Matrix Background
+let matrixColumns = [];
+const fontSize = 16;
+let maxColumns = 0;
+
+// Audio Node References
+let audioCtx = null;
+let humOsc = null;
+let humGain = null;
+let audioMasterGain = null;
+
+// UI Elements
+const uiHands = document.getElementById('ui-hands');
+const uiFps = document.getElementById('ui-fps');
+const uiGesture = document.getElementById('ui-gesture');
+const uiSpread = document.getElementById('ui-spread');
+const uiTrack = document.getElementById('ui-track');
+const uiPlayback = document.getElementById('ui-playback');
+const uiVolume = document.getElementById('ui-volume');
+const uiCurrentTime = document.getElementById('ui-current-time');
+const uiDuration = document.getElementById('ui-duration');
+const trackProgress = document.getElementById('trackProgress');
+const musicPlayer = document.getElementById('musicPlayer');
+const playlistInput = document.getElementById('playlistInput');
+const playlistSelect = document.getElementById('playlistSelect');
+const prevTrackBtn = document.getElementById('prevTrackBtn');
+const playPauseBtn = document.getElementById('playPauseBtn');
+const nextTrackBtn = document.getElementById('nextTrackBtn');
+const muteToggleBtn = document.getElementById('muteToggleBtn');
+const loopToggleBtn = document.getElementById('loopToggleBtn');
+
+let playlist = [];
+let currentTrackIndex = -1;
+let lastDetectedGesture = [null, null];
+let lastDualGesture = null;
+let lastMusicActionTime = {};
+const MUSIC_ACTION_COOLDOWN = 900;
+const SEEK_STEP_SECONDS = 10;
+const bundledTracks = [
+    { name: 'Neon Pulse (Demo)', url: 'tracks/neon-pulse.wav', source: 'bundled' },
+    { name: 'Gesture Drift (Demo)', url: 'tracks/gesture-drift.wav', source: 'bundled' },
+    { name: 'Aura Loop (Demo)', url: 'tracks/aura-loop.wav', source: 'bundled' }
+];
+
+function clamp(value, min, max) {
+    return Math.min(max, Math.max(min, value));
+}
+
+function formatTime(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return '0:00';
+    const mins = Math.floor(seconds / 60);
+    const secs = Math.floor(seconds % 60);
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+}
+
+function getTrackLabel(track = playlist[currentTrackIndex]) {
+    return track ? track.name.replace(/\.[^.]+$/, '') : 'No track loaded';
+}
+
+function updateVolumeUI() {
+    const volumePct = `${Math.round(settings.audioVolume * 100)}%`;
+    uiVolume.innerText = musicPlayer.muted ? `Muted (${volumePct})` : volumePct;
+    muteToggleBtn.classList.toggle('active', musicPlayer.muted);
+    muteToggleBtn.textContent = musicPlayer.muted ? 'Unmute' : 'Mute';
+}
+
+function refreshPlaylistSelect() {
+    playlistSelect.innerHTML = '';
+
+    if (!playlist.length) {
+        const emptyOption = document.createElement('option');
+        emptyOption.textContent = 'No tracks loaded';
+        playlistSelect.appendChild(emptyOption);
+        playlistSelect.disabled = true;
+        return;
+    }
+
+    playlistSelect.disabled = false;
+    playlist.forEach((track, index) => {
+        const option = document.createElement('option');
+        option.value = index;
+        option.textContent = `${index + 1}. ${track.name}`;
+        option.selected = index === currentTrackIndex;
+        playlistSelect.appendChild(option);
+    });
+}
+
+function updatePlaybackButtons() {
+    const hasTracks = playlist.length > 0;
+    [prevTrackBtn, playPauseBtn, nextTrackBtn, muteToggleBtn, loopToggleBtn].forEach((button) => {
+        button.disabled = !hasTracks;
+    });
+
+    playPauseBtn.textContent = musicPlayer.paused ? 'Play' : 'Pause';
+    loopToggleBtn.textContent = musicPlayer.loop ? 'Loop On' : 'Loop';
+    loopToggleBtn.classList.toggle('active', musicPlayer.loop);
+}
+
+function updatePlayerUI(statusText) {
+    uiTrack.innerText = getTrackLabel();
+    uiPlayback.innerText = statusText || (!playlist.length ? 'Load tracks' : (musicPlayer.paused ? 'Paused' : 'Playing'));
+    uiCurrentTime.innerText = formatTime(musicPlayer.currentTime || 0);
+    uiDuration.innerText = formatTime(musicPlayer.duration || 0);
+    trackProgress.disabled = !playlist.length;
+    trackProgress.max = Number.isFinite(musicPlayer.duration) ? musicPlayer.duration : 0;
+    trackProgress.value = Number.isFinite(musicPlayer.currentTime) ? musicPlayer.currentTime : 0;
+    refreshPlaylistSelect();
+    updatePlaybackButtons();
+    updateVolumeUI();
+}
+
+function syncAudioVolume(volume) {
+    settings.audioVolume = clamp(volume, 0, 1);
+
+    if (audioCtx && audioMasterGain) {
+        audioMasterGain.gain.setTargetAtTime(settings.audioVolume, audioCtx.currentTime, 0.05);
+    }
+
+    musicPlayer.volume = settings.audioVolume;
+    const slider = document.getElementById('audioVolume');
+    const sliderValue = Math.round(settings.audioVolume * 100);
+    if (slider && parseInt(slider.value, 10) !== sliderValue) {
+        slider.value = sliderValue;
+    }
+
+    updateVolumeUI();
+}
+
+function revokePlaylistUrls() {
+    playlist.forEach((track) => {
+        if (track.url && track.url.startsWith('blob:')) {
+            URL.revokeObjectURL(track.url);
+        }
+    });
+}
+
+function seedBundledPlaylist() {
+    playlist = bundledTracks.map((track) => ({ ...track }));
+    currentTrackIndex = 0;
+    loadTrack(0, { autoplay: false });
+    updatePlayerUI('Demo tracks ready');
+}
+
+function loadPlaylist(files) {
+    if (!files.length) return;
+
+    const userTracks = files.map((file) => ({
+        name: file.name,
+        url: URL.createObjectURL(file),
+        source: 'user'
+    }));
+
+    const hadTracks = playlist.length > 0;
+    playlist = playlist.concat(userTracks);
+
+    if (!hadTracks) {
+        currentTrackIndex = 0;
+        loadTrack(0, { autoplay: false });
+    } else {
+        refreshPlaylistSelect();
+        updatePlaybackButtons();
+    }
+
+    updatePlayerUI(`Added ${userTracks.length} track${userTracks.length > 1 ? 's' : ''}`);
+}
+
+function loadTrack(index, { autoplay = false } = {}) {
+    if (!playlist.length) {
+        updatePlayerUI('Load tracks');
+        return false;
+    }
+
+    currentTrackIndex = (index + playlist.length) % playlist.length;
+    musicPlayer.src = playlist[currentTrackIndex].url;
+    musicPlayer.load();
+    updatePlayerUI(autoplay ? 'Loading…' : 'Ready');
+
+    if (autoplay) {
+        playCurrentTrack();
+    }
+
+    return true;
+}
+
+async function playCurrentTrack() {
+    if (!playlist.length) {
+        updatePlayerUI('Load tracks in Settings');
+        return false;
+    }
+
+    if (!musicPlayer.src) {
+        loadTrack(currentTrackIndex >= 0 ? currentTrackIndex : 0);
+    }
+
+    try {
+        await musicPlayer.play();
+        updatePlayerUI('Playing');
+        return true;
+    } catch (err) {
+        console.error('Music playback failed', err);
+        updatePlayerUI('Playback blocked');
+        return false;
+    }
+}
+
+function togglePlayback() {
+    if (!playlist.length) {
+        updatePlayerUI('Load tracks in Settings');
+        return false;
+    }
+
+    if (musicPlayer.paused) {
+        return playCurrentTrack();
+    }
+
+    musicPlayer.pause();
+    updatePlayerUI('Paused');
+    return true;
+}
+
+function changeTrack(step) {
+    if (!playlist.length) {
+        updatePlayerUI('Load tracks in Settings');
+        return false;
+    }
+
+    const shouldAutoplay = !musicPlayer.paused || musicPlayer.currentTime > 0;
+    return loadTrack(currentTrackIndex + step, { autoplay: shouldAutoplay });
+}
+
+function seekTrack(deltaSeconds) {
+    if (!playlist.length || !Number.isFinite(musicPlayer.duration)) {
+        updatePlayerUI('Track not ready');
+        return false;
+    }
+
+    musicPlayer.currentTime = clamp(musicPlayer.currentTime + deltaSeconds, 0, musicPlayer.duration);
+    updatePlayerUI(musicPlayer.paused ? 'Paused' : 'Playing');
+    return true;
+}
+
+function toggleMute() {
+    if (!playlist.length) {
+        updatePlayerUI('Load tracks in Settings');
+        return false;
+    }
+
+    musicPlayer.muted = !musicPlayer.muted;
+    updatePlayerUI(musicPlayer.muted ? 'Muted' : 'Unmuted');
+    return true;
+}
+
+function toggleLoopMode() {
+    if (!playlist.length) {
+        updatePlayerUI('Load tracks in Settings');
+        return false;
+    }
+
+    musicPlayer.loop = !musicPlayer.loop;
+    updatePlayerUI(musicPlayer.loop ? 'Loop enabled' : 'Loop disabled');
+    return true;
+}
+
+function withLoadedTrack(action) {
+    if (!playlist.length) {
+        updatePlayerUI('Load tracks in Settings');
+        return false;
+    }
+
+    return action();
+}
+
+function runMusicAction(actionKey, callback, cooldown = MUSIC_ACTION_COOLDOWN) {
+    const now = performance.now();
+    if (now - (lastMusicActionTime[actionKey] || 0) < cooldown) {
+        return false;
+    }
+
+    const didRun = callback();
+    if (didRun !== false) {
+        lastMusicActionTime[actionKey] = now;
+    }
+
+    return didRun !== false;
+}
+
+function handleGestureMusicAction(handIdx, gestureKey, callback) {
+    if (lastDetectedGesture[handIdx] === gestureKey) {
+        return false;
+    }
+
+    return runMusicAction(gestureKey, callback);
+}
+
+function handleDualGestureMusicAction(gestureKey, callback) {
+    if (lastDualGesture === gestureKey) {
+        return false;
+    }
+
+    return runMusicAction(`dual:${gestureKey}`, callback, 1100);
+}
+
+/**
+ * INITIALIZATION
+ */
+function resize() {
+    width = window.innerWidth;
+    height = window.innerHeight;
+    bgCanvas.width = width;
+    bgCanvas.height = height;
+    trailCanvas.width = width;
+    trailCanvas.height = height;
+    mainCanvas.width = width;
+    mainCanvas.height = height;
+    
+    maxColumns = Math.floor(width / fontSize);
+    matrixColumns = new Array(maxColumns).fill(1).map(() => Math.random() * height/fontSize);
+}
+window.addEventListener('resize', resize);
+resize();
+
+/**
+ * HAND SMOOTHING (KALMAN-LIKE FILTER)
+ */
+function smoothLandmarks(hand, handIndex, alpha = settings.handSmoothing) {
+    if (!smoothedHands[handIndex]) {
+        smoothedHands[handIndex] = hand;
+        return hand;
+    }
+    
+    const smoothed = hand.map((point, idx) => {
+        const prev = smoothedHands[handIndex][idx];
+        return {
+            x: prev.x * alpha + point.x * (1 - alpha),
+            y: prev.y * alpha + point.y * (1 - alpha),
+            z: prev.z * alpha + point.z * (1 - alpha)
+        };
+    });
+    
+    smoothedHands[handIndex] = smoothed;
+    return smoothed;
+}
+
+/**
+ * TRAIL DRAWING SYSTEM
+ */
+function drawTrails() {
+    if (!settings.trailsEnabled) return;
+    
+    currentHands.forEach((hand, handIdx) => {
+        const tipPos = mapToCanvas(hand[8]); // Index finger tip
+        
+        if (!handTrails[handIdx]) handTrails[handIdx] = [];
+        handTrails[handIdx].push(tipPos);
+        
+        if (handTrails[handIdx].length > settings.trailLength) {
+            handTrails[handIdx].shift();
+        }
+        
+        // Draw trail with gradient
+        trailCtx.strokeStyle = themes[currentTheme](time, handIdx, 2);
+        trailCtx.lineWidth = 2;
+        trailCtx.lineCap = 'round';
+        trailCtx.lineJoin = 'round';
+        
+        for (let i = 0; i < handTrails[handIdx].length - 1; i++) {
+            const p1 = handTrails[handIdx][i];
+            const p2 = handTrails[handIdx][i + 1];
+            const opacity = i / handTrails[handIdx].length;
+            
+            trailCtx.globalAlpha = opacity * 0.5;
+            trailCtx.beginPath();
+            trailCtx.moveTo(p1.x, p1.y);
+            trailCtx.lineTo(p2.x, p2.y);
+            trailCtx.stroke();
+        }
+        trailCtx.globalAlpha = 1.0;
+    });
+}
+
+/**
+ * EXTENDED GESTURE RECOGNITION
+ */
+
+// Gesture tracking to avoid rapid re-triggering
+let lastGestureTime = [0, 0];
+const GESTURE_COOLDOWN = 300; // ms
+let lastDualGestureTime = 0;
+
+function canDetectGesture(handIdx) {
+    const now = performance.now();
+    return now - lastGestureTime[handIdx] >= GESTURE_COOLDOWN;
+}
+
+function markGestureDetected(handIdx) {
+    lastGestureTime[handIdx] = performance.now();
+}
+
+function canDetectDualGesture() {
+    const now = performance.now();
+    return now - lastDualGestureTime >= GESTURE_COOLDOWN;
+}
+
+function markDualGestureDetected() {
+    lastDualGestureTime = performance.now();
+}
+
+// ========== BASIC GESTURES ==========
+
+function detectPinch(hand) {
+    const thumb = hand[4];
+    const index = hand[8];
+    return getDist(thumb, index) < 0.05;
+}
+
+function detectPeaceSign(hand) {
+    const indexExtended = getDist(hand[8], hand[6]) > 0.08;
+    const middleExtended = getDist(hand[12], hand[10]) > 0.08;
+    const ringClosed = getDist(hand[16], hand[14]) < 0.05;
+    const pinkyClosed = getDist(hand[20], hand[18]) < 0.05;
+    
+    return indexExtended && middleExtended && ringClosed && pinkyClosed;
+}
+
+function detectThumbsUp(hand) {
+    const thumbUp = hand[4].y < hand[2].y;
+    const fingersClosed = FINGER_TIPS.slice(1).every(idx => 
+        getDist(hand[idx], hand[0]) < 0.15
+    );
+    
+    return thumbUp && fingersClosed;
+}
+
+// ========== ROCK-PAPER-SCISSORS ==========
+
+function detectRockSign(hand) {
+    // All fingers closed in a fist
+    const allFingersClose = FINGER_TIPS.every(idx => 
+        getDist(hand[idx], hand[0]) < 0.12
+    );
+    const thumbClose = getDist(hand[4], hand[2]) < 0.1;
+    return allFingersClose && thumbClose;
+}
+
+function detectPaperSign(hand) {
+    // All fingers extended and spread
+    const indexExt = getDist(hand[8], hand[6]) > 0.08;
+    const middleExt = getDist(hand[12], hand[10]) > 0.08;
+    const ringExt = getDist(hand[16], hand[14]) > 0.08;
+    const pinkyExt = getDist(hand[20], hand[18]) > 0.08;
+    
+    return indexExt && middleExt && ringExt && pinkyExt;
+}
+
+function detectScissorsSign(hand) {
+    // Index and middle extended, others closed
+    const indexExt = getDist(hand[8], hand[6]) > 0.08;
+    const middleExt = getDist(hand[12], hand[10]) > 0.08;
+    const ringClosed = getDist(hand[16], hand[14]) < 0.06;
+    const pinkyClosed = getDist(hand[20], hand[18]) < 0.06;
+    
+    // Make sure they're separated (scissor movement)
+    const indexMiddleSpread = getDist(hand[8], hand[12]) > 0.08;
+    
+    return indexExt && middleExt && ringClosed && pinkyClosed && indexMiddleSpread;
+}
+
+// ========== HAND STATES ==========
+
+function detectFist(hand) {
+    return FINGER_TIPS.every(idx => getDist(hand[idx], hand[0]) < 0.12);
+}
+
+function detectOpenPalm(hand) {
+    const spread = getDist(hand[8], hand[20]);
+    return spread > 0.25; // Large spread indicates open hand
+}
+
+function detectPointingUp(hand) {
+    // Only index finger extended upward
+    const indexExt = getDist(hand[8], hand[6]) > 0.1;
+    const middleClosed = getDist(hand[12], hand[10]) < 0.06;
+    const ringClosed = getDist(hand[16], hand[14]) < 0.06;
+    const pinkyClosed = getDist(hand[20], hand[18]) < 0.06;
+    const thumbClose = getDist(hand[4], hand[2]) < 0.1;
+    const indexAboveWrist = hand[8].y < hand[0].y;
+    
+    return indexExt && middleClosed && ringClosed && pinkyClosed && thumbClose && indexAboveWrist;
+}
+
+function detectPointingRight(hand) {
+    // Only index finger extended to the right
+    const indexExt = getDist(hand[8], hand[6]) > 0.1;
+    const othersClosed = [12, 16, 20].every(idx => getDist(hand[idx], hand[0]) < 0.08);
+    const indexToRight = hand[8].x > hand[0].x + 0.15; // Extended to the right
+    
+    return indexExt && othersClosed && indexToRight;
+}
+
+function detectOKSign(hand) {
+    const thumbIndexDistance = getDist(hand[4], hand[8]);
+    const otherFingersClosed = [12, 16, 20].every(idx =>
+        getDist(hand[idx], hand[0]) > 0.1
+    );
+    
+    return thumbIndexDistance < 0.05 && otherFingersClosed;
+}
+
+function detectThumbsDown(hand) {
+    const thumbDown = hand[4].y > hand[2].y + 0.1; // Thumb pointing down
+    const fingersClosed = FINGER_TIPS.slice(1).every(idx => 
+        getDist(hand[idx], hand[0]) < 0.15
+    );
+    
+    return thumbDown && fingersClosed;
+}
+
+// ========== ADVANCED HAND SHAPES ==========
+
+function detectHolySign(hand) {
+    // Index and middle separated, ring and pinky closed
+    const indexExt = getDist(hand[8], hand[6]) > 0.08;
+    const middleExt = getDist(hand[12], hand[10]) > 0.08;
+    const ringClosed = getDist(hand[16], hand[14]) < 0.05;
+    const pinkyClosed = getDist(hand[20], hand[18]) < 0.05;
+    const separated = getDist(hand[8], hand[12]) > 0.1; // Large separation
+    
+    return indexExt && middleExt && ringClosed && pinkyClosed && separated;
+}
+
+function detectVictorySign(hand) {
+    // V-shape with index and middle
+    const indexExt = getDist(hand[8], hand[6]) > 0.1;
+    const middleExt = getDist(hand[12], hand[10]) > 0.1;
+    const ringClosed = getDist(hand[16], hand[14]) < 0.06;
+    const pinkyClosed = getDist(hand[20], hand[18]) < 0.06;
+    const vShape = getDist(hand[8], hand[12]) > 0.1; // V spread
+    
+    return indexExt && middleExt && ringClosed && pinkyClosed && vShape;
+}
+
+function detectLoveSign(hand) {
+    // Heart shape: thumb and index extended, middle pinky extended
+    const thumbExt = getDist(hand[4], hand[2]) > 0.1;
+    const indexExt = getDist(hand[8], hand[6]) > 0.08;
+    const pinkyExt = getDist(hand[20], hand[18]) > 0.08;
+    const ringClosed = getDist(hand[16], hand[14]) < 0.05;
+    const middleClosed = getDist(hand[12], hand[10]) < 0.05;
+    
+    return thumbExt && indexExt && pinkyExt && ringClosed && middleClosed;
+}
+
+function detectClaw(hand) {
+    // All fingers extended and curved
+    const allExtended = FINGER_TIPS.every(idx => getDist(hand[idx], hand[0]) > 0.15);
+    const thumbExt = getDist(hand[4], hand[2]) > 0.1;
+    const wideSpread = getDist(hand[8], hand[20]) > 0.3;
+    
+    return allExtended && thumbExt && wideSpread;
+}
+
+function detectGun(hand) {
+    // Thumb and index extended, middle closed
+    const indexExt = getDist(hand[8], hand[6]) > 0.08;
+    const thumbExt = getDist(hand[4], hand[2]) > 0.08;
+    const middleClosed = getDist(hand[12], hand[10]) < 0.05;
+    const ringClosed = getDist(hand[16], hand[14]) < 0.05;
+    const pinkyClosed = getDist(hand[20], hand[18]) < 0.05;
+    const thumbIndexSeparated = getDist(hand[4], hand[8]) > 0.08;
+    
+    return indexExt && thumbExt && middleClosed && ringClosed && pinkyClosed && thumbIndexSeparated;
+}
+
+function detectThreeFingers(hand) {
+    // Three fingers extended: index, middle, ring
+    const indexExt = getDist(hand[8], hand[6]) > 0.08;
+    const middleExt = getDist(hand[12], hand[10]) > 0.08;
+    const ringExt = getDist(hand[16], hand[14]) > 0.08;
+    const pinkyClosed = getDist(hand[20], hand[18]) < 0.05;
+    const thumbClose = getDist(hand[4], hand[2]) < 0.1;
+    
+    return indexExt && middleExt && ringExt && pinkyClosed && thumbClose;
+}
+
+function detectFour(hand) {
+    // Four fingers extended (all except thumb)
+    const allFingersExt = FINGER_TIPS.every(idx => 
+        getDist(hand[idx], hand[0]) > 0.15
+    );
+    const thumbClosed = getDist(hand[4], hand[2]) < 0.08;
+    
+    return allFingersExt && thumbClosed;
+}
+
+function detectSpock(hand) {
+    // Index and middle separated widely, ring and pinky separated
+    const indexExt = getDist(hand[8], hand[6]) > 0.1;
+    const middleExt = getDist(hand[12], hand[10]) > 0.1;
+    const ringExt = getDist(hand[16], hand[14]) > 0.08;
+    const pinkyExt = getDist(hand[20], hand[18]) > 0.08;
+    
+    // Large gaps between fingers
+    const indexMiddleGap = getDist(hand[8], hand[12]) > 0.12;
+    const ringPinkyGap = getDist(hand[16], hand[20]) > 0.12;
+    
+    return indexExt && middleExt && ringExt && pinkyExt && indexMiddleGap && ringPinkyGap;
+}
+
+// ========== HAND DYNAMICS ==========
+
+function detectHandTilt(hand, previousHand) {
+    if (!previousHand) return null;
+    
+    const palmMovement = getDist(hand[0], previousHand[0]);
+    const thumbMovement = getDist(hand[4], previousHand[4]);
+    
+    if (palmMovement < 0.01) return null; // No significant movement
+    
+    // Determine tilt direction
+    const tiltX = hand[0].x - previousHand[0].x;
+    const tiltY = hand[0].y - previousHand[0].y;
+    
+    if (Math.abs(tiltX) > Math.abs(tiltY)) {
+        return tiltX > 0 ? 'RIGHT' : 'LEFT';
+    } else {
+        return tiltY > 0 ? 'DOWN' : 'UP';
+    }
+}
+
+function detectHandSize(hand) {
+    // Measure hand size by distance from wrist to middle finger
+    const handSize = getDist(hand[0], hand[12]);
+    
+    if (handSize < 0.15) return 'SMALL';
+    if (handSize < 0.25) return 'MEDIUM';
+    return 'LARGE';
+}
+
+function detectHandRotation(hand, previousHand) {
+    if (!previousHand) return null;
+    
+    // Calculate rotation based on finger positions
+    const oldAngle = Math.atan2(previousHand[8].y - previousHand[0].y, previousHand[8].x - previousHand[0].x);
+    const newAngle = Math.atan2(hand[8].y - hand[0].y, hand[8].x - hand[0].x);
+    
+    const rotation = (newAngle - oldAngle) * (180 / Math.PI);
+    
+    if (Math.abs(rotation) < 2) return null;
+    return rotation > 0 ? 'CLOCKWISE' : 'COUNTERCLOCKWISE';
+}
+
+// ========== DUAL-HAND GESTURES ==========
+
+function detectHandsApproaching(hand1, hand2) {
+    const dist = getDist(hand1[0], hand2[0]);
+    return dist < 0.2; // Close proximity
+}
+
+function detectHandsCrossing(hand1, hand2) {
+    // Check if hands overlap significantly
+    let overlapPoints = 0;
+    for (let i = 0; i < 21; i++) {
+        if (getDist(hand1[i], hand2[i]) < 0.1) overlapPoints++;
+    }
+    return overlapPoints > 5;
+}
+
+function detectHandsDistance(hand1, hand2) {
+    const dist = getDist(hand1[0], hand2[0]);
+    
+    if (dist < 0.1) return 'TOUCHING';
+    if (dist < 0.2) return 'CLOSE';
+    if (dist < 0.4) return 'MEDIUM';
+    return 'FAR';
+}
+
+
+/**
+ * KEYBOARD SHORTCUTS
+ */
+function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+        document.documentElement.requestFullscreen().catch(err => {
+            console.log(`Fullscreen request failed: ${err.message}`);
+        });
+    } else {
+        document.exitFullscreen();
+    }
+}
+
+function toggleSettings() {
+    document.getElementById('settingsPanel').classList.toggle('hidden');
+}
+
+function toggleHelp() {
+    document.getElementById('helpOverlay').classList.toggle('hidden');
+}
+
+function togglePerfMonitor() {
+    const perfMon = document.getElementById('perfMonitor');
+    settings.perfMonitorEnabled = !settings.perfMonitorEnabled;
+    perfMon.style.display = settings.perfMonitorEnabled ? 'block' : 'none';
+}
+
+function toggleHUD() {
+    document.getElementById('hud').classList.toggle('hidden');
+    document.getElementById('themes').classList.toggle('hidden');
+}
+
+function resetEffects() {
+    particles = [];
+    ripples = [];
+    handTrails = [[], []];
+}
+
+function toggleMobileMode() {
+    settings.isMobileMode = !settings.isMobileMode;
+    console.log('Mobile mode:', settings.isMobileMode);
+}
+
+document.addEventListener('keydown', (e) => {
+    const key = e.key.toLowerCase();
+    
+    if (key === 'f') {
+        e.preventDefault();
+        toggleFullscreen();
+    } else if (key === 's') {
+        e.preventDefault();
+        toggleSettings();
+    } else if (key === 'h') {
+        e.preventDefault();
+        toggleHelp();
+    } else if (key === 'p') {
+        e.preventDefault();
+        togglePerfMonitor();
+    } else if (key === 't') {
+        e.preventDefault();
+        toggleHUD();
+    } else if (key === 'r') {
+        e.preventDefault();
+        resetEffects();
+    } else if (key === 'm') {
+        e.preventDefault();
+        toggleMobileMode();
+    }
+});
+
+/**
+ * SETTINGS PANEL HANDLERS
+ */
+document.querySelectorAll('.toggle-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        const setting = e.target.getAttribute('data-setting');
+        if (setting) {
+            settings[setting] = !settings[setting];
+            e.target.classList.toggle('active');
+        }
+    });
+});
+
+document.getElementById('particleCount')?.addEventListener('input', (e) => {
+    settings.particleCount = parseInt(e.target.value);
+    document.getElementById('particleCountVal').innerText = settings.particleCount;
+});
+
+document.getElementById('trailLength')?.addEventListener('input', (e) => {
+    settings.trailLength = parseInt(e.target.value);
+    document.getElementById('trailLengthVal').innerText = settings.trailLength;
+});
+
+document.getElementById('audioVolume')?.addEventListener('input', (e) => {
+    syncAudioVolume(parseInt(e.target.value, 10) / 100);
+});
+
+document.getElementById('handSmoothing')?.addEventListener('input', (e) => {
+    settings.handSmoothing = parseFloat(e.target.value);
+});
+
+playlistInput?.addEventListener('change', (e) => {
+    loadPlaylist(Array.from(e.target.files || []));
+});
+
+playlistSelect?.addEventListener('change', (e) => {
+    const nextIndex = parseInt(e.target.value, 10);
+    if (Number.isInteger(nextIndex)) {
+        loadTrack(nextIndex, { autoplay: !musicPlayer.paused || musicPlayer.currentTime > 0 });
+    }
+});
+
+trackProgress?.addEventListener('input', (e) => {
+    if (!playlist.length || !Number.isFinite(musicPlayer.duration)) return;
+    musicPlayer.currentTime = clamp(parseFloat(e.target.value), 0, musicPlayer.duration);
+    updatePlayerUI(musicPlayer.paused ? 'Paused' : 'Playing');
+});
+
+playPauseBtn?.addEventListener('click', togglePlayback);
+prevTrackBtn?.addEventListener('click', () => changeTrack(-1));
+nextTrackBtn?.addEventListener('click', () => changeTrack(1));
+muteToggleBtn?.addEventListener('click', toggleMute);
+loopToggleBtn?.addEventListener('click', toggleLoopMode);
+
+musicPlayer.addEventListener('loadedmetadata', () => updatePlayerUI('Ready'));
+musicPlayer.addEventListener('timeupdate', () => updatePlayerUI(musicPlayer.paused ? 'Paused' : 'Playing'));
+musicPlayer.addEventListener('play', () => updatePlayerUI('Playing'));
+musicPlayer.addEventListener('pause', () => updatePlayerUI('Paused'));
+musicPlayer.addEventListener('volumechange', () => {
+    settings.audioVolume = musicPlayer.volume;
+    updateVolumeUI();
+});
+musicPlayer.addEventListener('ended', () => {
+    if (musicPlayer.loop) {
+        updatePlayerUI('Looping');
+        return;
+    }
+
+    if (playlist.length > 1) {
+        loadTrack(currentTrackIndex + 1, { autoplay: true });
+        return;
+    }
+
+    updatePlayerUI('Track ended');
+});
+
+window.addEventListener('beforeunload', revokePlaylistUrls);
+seedBundledPlaylist();
+
+// Button handlers
+document.getElementById('settingsToggle')?.addEventListener('click', toggleSettings);
+document.getElementById('fullscreenToggle')?.addEventListener('click', toggleFullscreen);
+document.getElementById('helpToggle')?.addEventListener('click', toggleHelp);
+
+/**
+ * PERFORMANCE MONITOR UPDATE
+ */
+function updatePerfMonitor() {
+    if (!settings.perfMonitorEnabled) return;
+    
+    document.getElementById('perf-fps').innerText = perfMetrics.fps;
+    document.getElementById('perf-frame').innerText = (perfMetrics.frameTime).toFixed(1);
+    document.getElementById('perf-particles').innerText = perfMetrics.particleCount;
+    document.getElementById('perf-memory').innerText = perfMetrics.memory.toFixed(1);
+    
+    // Add warning/critical classes if needed
+    const fpsStat = document.getElementById('perf-fps').parentElement;
+    if (perfMetrics.fps < 30) {
+        fpsStat.classList.add('critical');
+    } else if (perfMetrics.fps < 50) {
+        fpsStat.classList.add('warning');
+    } else {
+        fpsStat.classList.remove('warning', 'critical');
+    }
+}
+
+/**
+ * FINGER-SPECIFIC AUDIO NOTES
+ */
+function initFingerNotes() {
+    if (!audioCtx || !settings.fingerNotesEnabled) return;
+    
+    Object.entries(fingerNotes).forEach(([fingerIdx, freq]) => {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        
+        osc.type = 'sine';
+        osc.frequency.value = freq;
+        gain.gain.value = 0;
+        
+        osc.connect(gain);
+        gain.connect(audioMasterGain);
+        osc.start();
+        
+        fingerOscillators[fingerIdx] = osc;
+        fingerGains[fingerIdx] = gain;
+    });
+}
+
+function updateFingerNotes(hand) {
+    if (!settings.fingerNotesEnabled || !audioCtx) return;
+    
+    Object.entries(fingerNotes).forEach(([fingerIdx, freq]) => {
+        const idx = parseInt(fingerIdx);
+        if (hand && hand[idx] && fingerGains[fingerIdx]) {
+            // Volume based on finger height (higher = louder)
+            const heightRatio = 1 - hand[idx].y; // Invert Y axis
+            const volume = Math.max(0, heightRatio * 0.15);
+            fingerGains[fingerIdx].gain.setTargetAtTime(volume, audioCtx.currentTime, 0.05);
+            
+            // Slight frequency modulation based on hand position
+            const freqMod = 1 + (hand[idx].x - 0.5) * 0.1;
+            fingerOscillators[fingerIdx].frequency.setTargetAtTime(
+                freq * freqMod, 
+                audioCtx.currentTime, 
+                0.1
+            );
+        } else if (fingerGains[fingerIdx]) {
+            fingerGains[fingerIdx].gain.setTargetAtTime(0, audioCtx.currentTime, 0.05);
+        }
+    });
+}
+
+/**
+ * HAPTIC FEEDBACK
+ */
+function triggerHaptic(intensity = 50) {
+    if ('vibrate' in navigator) {
+        navigator.vibrate(intensity);
+    }
+}
+
+/**
+ * MOBILE OPTIMIZATION
+ */
+function optimizeForMobile() {
+    if (settings.isMobileMode) {
+        settings.particleCount = Math.min(settings.particleCount, 30);
+        // Reduce canvas resolution on mobile
+        const scale = 0.75;
+        bgCanvas.width = width * scale;
+        bgCanvas.height = height * scale;
+        trailCanvas.width = width * scale;
+        trailCanvas.height = height * scale;
+        mainCanvas.width = width * scale;
+        mainCanvas.height = height * scale;
+    }
+}
+
+// UI Theme Switcher
+document.querySelectorAll('.theme-btn').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+        document.querySelectorAll('.theme-btn').forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        currentTheme = e.target.getAttribute('data-theme');
+        document.documentElement.style.setProperty('--accent', themes[currentTheme](0, 1, 1));
+    });
+});
+
+// Start button triggers AudioContext and hides overlay
+document.getElementById('startBtn').addEventListener('click', () => {
+    document.getElementById('startOverlay').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    document.getElementById('themes').classList.remove('hidden');
+    
+    // Apply mobile optimizations
+    optimizeForMobile();
+    
+    initAudio();
+    syncAudioVolume(settings.audioVolume);
+    initMediaPipe();
+    requestAnimationFrame(renderLoop);
+});
+
+
+/**
+ * AUDIO ENGINE
+ */
+function initAudio() {
+    try {
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        audioMasterGain = audioCtx.createGain();
+        audioMasterGain.gain.value = settings.audioVolume;
+        audioMasterGain.connect(audioCtx.destination);
+        
+        // Continuous Hum
+        humOsc = audioCtx.createOscillator();
+        humGain = audioCtx.createGain();
+        
+        humOsc.type = 'sine';
+        humOsc.frequency.value = 100;
+        
+        humGain.gain.value = 0; // Mute until hands are seen
+        
+        humOsc.connect(humGain);
+        humGain.connect(audioMasterGain);
+        humOsc.start();
+        
+        // Initialize finger note oscillators
+        initFingerNotes();
+    } catch(e) {
+        console.error("Web Audio API failed", e);
+    }
+}
+
+function triggerZap() {
+    if (!audioCtx) return;
+    const osc = audioCtx.createOscillator();
+    const gainNode = audioCtx.createGain();
+    
+    // Zap sound profile
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+    
+    gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
+    
+    osc.connect(gainNode);
+    gainNode.connect(audioMasterGain || audioCtx.destination);
+    
+    osc.start();
+    osc.stop(audioCtx.currentTime + 0.15);
+}
+
+function updateHum(activeHands) {
+    if (!audioCtx || !humGain) return;
+    if (activeHands.length < 2) {
+        humGain.gain.setTargetAtTime(0, audioCtx.currentTime, 0.1);
+        return;
+    }
+
+    // Measure distance between index fingers to modulate volume
+    const p1 = activeHands[0][8];
+    const p2 = activeHands[1][8];
+    const dx = p1.x - p2.x;
+    const dy = p1.y - p2.y;
+    const dist = Math.sqrt(dx*dx + dy*dy);
+    
+    // The closer they are, the higher the pitch and volume
+    const targetFreq = 100 + (1 - Math.min(dist, 1)) * 300;
+    const targetVolume = 0.05 + (1 - Math.min(dist, 1)) * 0.15;
+    
+    humOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.1);
+    humGain.gain.setTargetAtTime(targetVolume, audioCtx.currentTime, 0.1);
+}
+
+/**
+ * MATH & STATE LOGIC
+ */
+function getDist(p1, p2) {
+    return Math.hypot(p1.x - p2.x, p1.y - p2.y);
+}
+
+function cloneHand(hand) {
+    return hand.map((point) => ({ ...point }));
+}
+
+// Convert normalized landmark to specific canvas scale (Note: canvas is horizontally flipped)
+function mapToCanvas(point) {
+    return { x: point.x * width, y: point.y * height };
+}
+
+let lastPinchState = [false, false]; // Prevents rapid re-triggering
+
+function detectGesturesLegacy() {
+    if (!currentHands.length) return;
+    
+    currentHands.forEach((hand, idx) => {
+        if (!canDetectGesture(idx)) return;
+        
+        const handPos = mapToCanvas(hand[0]);
+        const glowColor = themes[currentTheme](time, idx, 2);
+        
+        // ========== BASIC PINCH ==========
+        if (detectPinch(hand)) {
+            const midpoint = {
+                x: (hand[4].x + hand[8].x) / 2, 
+                y: (hand[4].y + hand[8].y) / 2
+            };
+            createShockwave(mapToCanvas(midpoint), glowColor);
+            triggerZap();
+            triggerHaptic(30);
+            uiGesture.innerText = "📌 PINCH!";
+            createParticles(mapToCanvas(midpoint), glowColor, 8);
+            return;
+        }
+        
+        // ========== ROCK-PAPER-SCISSORS ==========
+        if (detectRockSign(hand)) {
+            createShockwave(handPos, glowColor);
+            triggerHaptic(40);
+            uiGesture.innerText = "✊ ROCK!";
+            createParticles(handPos, glowColor, 6);
+            return;
+        }
+        
+        if (detectPaperSign(hand)) {
+            createParticles(handPos, glowColor, 12);
+            triggerHaptic(25);
+            uiGesture.innerText = "📄 PAPER!";
+            return;
+        }
+        
+        if (detectScissorsSign(hand)) {
+            createShockwave(handPos, glowColor);
+            triggerZap();
+            triggerHaptic(35);
+            uiGesture.innerText = "✂️ SCISSORS!";
+            return;
+        }
+        
+        // ========== PEACE & VICTORY ==========
+        if (detectVictorySign(hand)) {
+            createParticles(mapToCanvas(hand[8]), glowColor, 8);
+            triggerHaptic(45);
+            uiGesture.innerText = "🎉 VICTORY!";
+            createShockwave(handPos, glowColor);
+            return;
+        }
+        
+        if (detectPeaceSign(hand)) {
+            createParticles(mapToCanvas(hand[8]), glowColor, 5);
+            triggerHaptic(30);
+            uiGesture.innerText = "☮️ PEACE!";
+            return;
+        }
+        
+        // ========== THUMBS ==========
+        if (detectThumbsUp(hand)) {
+            createShockwave(mapToCanvas(hand[4]), glowColor);
+            triggerHaptic(50);
+            uiGesture.innerText = "👍 BOOST!";
+            createParticles(mapToCanvas(hand[4]), glowColor, 10);
+            return;
+        }
+        
+        if (detectThumbsDown(hand)) {
+            triggerHaptic(40);
+            uiGesture.innerText = "👎 DOWN!";
+            createParticles(mapToCanvas(hand[4]), glowColor, 7);
+            return;
+        }
+        
+        // ========== POINTING ==========
+        if (detectPointingUp(hand)) {
+            triggerHaptic(20);
+            uiGesture.innerText = "☝️ POINT UP!";
+            return;
+        }
+        
+        if (detectPointingRight(hand)) {
+            triggerHaptic(20);
+            uiGesture.innerText = "👉 POINT RIGHT!";
+            return;
+        }
+        
+        // ========== HAND SHAPES ==========
+        if (detectSpock(hand)) {
+            createShockwave(handPos, glowColor);
+            createParticles(handPos, glowColor, 12);
+            triggerHaptic(60);
+            uiGesture.innerText = "🖖 SPOCK!";
+            return;
+        }
+        
+        if (detectLoveSign(hand)) {
+            createParticles(handPos, '#ff69b4', 15); // Pink color
+            triggerHaptic(35);
+            uiGesture.innerText = "❤️ LOVE!";
+            return;
+        }
+        
+        if (detectClaw(hand)) {
+            createShockwave(handPos, glowColor);
+            triggerHaptic(50);
+            uiGesture.innerText = "🐾 CLAW!";
+            return;
+        }
+        
+        if (detectHolySign(hand)) {
+            createParticles(handPos, glowColor, 10);
+            triggerHaptic(40);
+            uiGesture.innerText = "⛪ HOLY!";
+            return;
+        }
+        
+        if (detectGun(hand)) {
+            triggerZap();
+            triggerHaptic(45);
+            uiGesture.innerText = "🔫 BANG!";
+            createShockwave(mapToCanvas(hand[8]), glowColor);
+            return;
+        }
+        
+        if (detectThreeFingers(hand)) {
+            createParticles(handPos, glowColor, 9);
+            triggerHaptic(30);
+            uiGesture.innerText = "🤟 THREE!";
+            return;
+        }
+        
+        if (detectFour(hand)) {
+            createParticles(handPos, glowColor, 11);
+            triggerHaptic(35);
+            uiGesture.innerText = "4️⃣ FOUR!";
+            return;
+        }
+        
+        if (detectOKSign(hand)) {
+            createParticles(mapToCanvas(hand[8]), glowColor, 3);
+            triggerHaptic(25);
+            uiGesture.innerText = "👌 OK!";
+            return;
+        }
+        
+        // ========== HAND DYNAMICS ==========
+        const handSize = detectHandSize(hand);
+        if (handSize === 'LARGE') {
+            uiGesture.innerText = "📏 LARGE";
+        } else if (handSize === 'SMALL') {
+            uiGesture.innerText = "🤏 SMALL";
+        }
+        
+        if (previousHands[idx]) {
+            const tilt = detectHandTilt(hand, previousHands[idx]);
+            if (tilt) {
+                const tiltEmojis = { 'UP': '⬆️', 'DOWN': '⬇️', 'LEFT': '⬅️', 'RIGHT': '➡️' };
+                uiGesture.innerText = `${tiltEmojis[tilt]} ${tilt}`;
+            }
+            
+            const rotation = detectHandRotation(hand, previousHands[idx]);
+            if (rotation) {
+                const rotEmoji = rotation === 'CLOCKWISE' ? '🔄' : '🔃';
+                uiGesture.innerText = `${rotEmoji} ${rotation}`;
+            }
+        }
+        
+        // Store for next frame
+        previousHands[idx] = JSON.parse(JSON.stringify(hand));
+    });
+
+    // ========== DUAL-HAND GESTURES ==========
+    if (currentHands.length >= 2) {
+        const hand1 = currentHands[0];
+        const hand2 = currentHands[1];
+        
+        const distance = detectHandsDistance(hand1, hand2);
+        
+        if (distance === 'TOUCHING') {
+            createShockwave(mapToCanvas(hand1[0]), themes[currentTheme](time, 0, 2));
+            triggerHaptic(60);
+            uiGesture.innerText = "🤝 TOUCHING!";
+        } else if (distance === 'CLOSE') {
+            uiGesture.innerText = "🤐 CLOSE!";
+        } else if (distance === 'MEDIUM') {
+            uiGesture.innerText = "🤨 MEDIUM";
+        }
+        
+        if (detectHandsCrossing(hand1, hand2)) {
+            triggerHaptic(35);
+            uiGesture.innerText = "❌ CROSSING!";
+        }
+    }
+
+    // ========== SPREAD PERCENTAGE & STATE ==========
+    if (currentHands[0]) {
+        const spread = getDist(currentHands[0][8], currentHands[0][20]);
+        let spreadPct = Math.min(Math.round(spread * 300), 100);
+        uiSpread.innerText = spreadPct + '%';
+        
+        if (detectFist(currentHands[0])) {
+            if (!lastPinchState.includes(true)) {
+                uiGesture.innerText = "✊ FIST";
+            }
+        } else if (detectOpenPalm(currentHands[0])) {
+            if (!lastPinchState.includes(true)) {
+                uiGesture.innerText = "🖐️ OPEN";
+            }
+        }
+    }
+}
+
+function detectGestures() {
+    if (!currentHands.length) return;
+    let hasPrimaryGesture = false;
+
+    currentHands.forEach((hand, idx) => {
+        if (!canDetectGesture(idx)) return;
+
+        const handPos = mapToCanvas(hand[0]);
+        const glowColor = themes[currentTheme](time, idx, 2);
+        let matchedGesture = null;
+
+        if (detectPinch(hand)) {
+            matchedGesture = 'PINCH';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            const midpoint = {
+                x: (hand[4].x + hand[8].x) / 2,
+                y: (hand[4].y + hand[8].y) / 2
+            };
+            createShockwave(mapToCanvas(midpoint), glowColor);
+            triggerZap();
+            triggerHaptic(30);
+            uiGesture.innerText = 'PINCH!';
+            createParticles(mapToCanvas(midpoint), glowColor, 8);
+            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(togglePlayback));
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectRockSign(hand)) {
+            matchedGesture = 'ROCK';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createShockwave(handPos, glowColor);
+            triggerHaptic(40);
+            uiGesture.innerText = 'ROCK!';
+            createParticles(handPos, glowColor, 6);
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectPaperSign(hand)) {
+            matchedGesture = 'PAPER';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createParticles(handPos, glowColor, 12);
+            triggerHaptic(25);
+            uiGesture.innerText = 'PAPER!';
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectScissorsSign(hand)) {
+            matchedGesture = 'SCISSORS';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createShockwave(handPos, glowColor);
+            triggerZap();
+            triggerHaptic(35);
+            uiGesture.innerText = 'SCISSORS!';
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectVictorySign(hand)) {
+            matchedGesture = 'VICTORY';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createParticles(mapToCanvas(hand[8]), glowColor, 8);
+            triggerHaptic(45);
+            uiGesture.innerText = 'VICTORY!';
+            createShockwave(handPos, glowColor);
+            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(toggleLoopMode));
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectPeaceSign(hand)) {
+            matchedGesture = 'PEACE';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createParticles(mapToCanvas(hand[8]), glowColor, 5);
+            triggerHaptic(30);
+            uiGesture.innerText = 'PEACE!';
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectThumbsUp(hand)) {
+            matchedGesture = 'THUMBS_UP';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createShockwave(mapToCanvas(hand[4]), glowColor);
+            triggerHaptic(50);
+            uiGesture.innerText = 'BOOST!';
+            createParticles(mapToCanvas(hand[4]), glowColor, 10);
+            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => {
+                syncAudioVolume(settings.audioVolume + 0.1);
+                updatePlayerUI('Volume up');
+                return true;
+            }));
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectThumbsDown(hand)) {
+            matchedGesture = 'THUMBS_DOWN';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            triggerHaptic(40);
+            uiGesture.innerText = 'DOWN!';
+            createParticles(mapToCanvas(hand[4]), glowColor, 7);
+            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => {
+                syncAudioVolume(settings.audioVolume - 0.1);
+                updatePlayerUI('Volume down');
+                return true;
+            }));
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectPointingUp(hand)) {
+            matchedGesture = 'POINT_UP';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            triggerHaptic(20);
+            uiGesture.innerText = 'POINT UP!';
+            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => changeTrack(-1)));
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectPointingRight(hand)) {
+            matchedGesture = 'POINT_RIGHT';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            triggerHaptic(20);
+            uiGesture.innerText = 'POINT RIGHT!';
+            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => changeTrack(1)));
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectSpock(hand)) {
+            matchedGesture = 'SPOCK';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createShockwave(handPos, glowColor);
+            createParticles(handPos, glowColor, 12);
+            triggerHaptic(60);
+            uiGesture.innerText = 'SPOCK!';
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectLoveSign(hand)) {
+            matchedGesture = 'LOVE';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createParticles(handPos, '#ff69b4', 15);
+            triggerHaptic(35);
+            uiGesture.innerText = 'LOVE!';
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectClaw(hand)) {
+            matchedGesture = 'CLAW';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createShockwave(handPos, glowColor);
+            triggerHaptic(50);
+            uiGesture.innerText = 'CLAW!';
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectHolySign(hand)) {
+            matchedGesture = 'HOLY';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createParticles(handPos, glowColor, 10);
+            triggerHaptic(40);
+            uiGesture.innerText = 'HOLY!';
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectGun(hand)) {
+            matchedGesture = 'GUN';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            triggerZap();
+            triggerHaptic(45);
+            uiGesture.innerText = 'BANG!';
+            createShockwave(mapToCanvas(hand[8]), glowColor);
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectThreeFingers(hand)) {
+            matchedGesture = 'THREE';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createParticles(handPos, glowColor, 9);
+            triggerHaptic(30);
+            uiGesture.innerText = 'THREE!';
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectFour(hand)) {
+            matchedGesture = 'FOUR';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createParticles(handPos, glowColor, 11);
+            triggerHaptic(35);
+            uiGesture.innerText = 'FOUR!';
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        if (detectOKSign(hand)) {
+            matchedGesture = 'OK';
+            markGestureDetected(idx);
+            hasPrimaryGesture = true;
+            createParticles(mapToCanvas(hand[8]), glowColor, 3);
+            triggerHaptic(25);
+            uiGesture.innerText = 'OK!';
+            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(toggleMute));
+            previousHands[idx] = cloneHand(hand);
+            lastDetectedGesture[idx] = matchedGesture;
+            return;
+        }
+
+        const handSize = detectHandSize(hand);
+        if (handSize === 'LARGE') {
+            uiGesture.innerText = 'LARGE';
+        } else if (handSize === 'SMALL') {
+            uiGesture.innerText = 'SMALL';
+        }
+
+        if (previousHands[idx]) {
+            const tilt = detectHandTilt(hand, previousHands[idx]);
+            if (tilt) {
+                markGestureDetected(idx);
+                uiGesture.innerText = tilt;
+            }
+
+            const rotation = detectHandRotation(hand, previousHands[idx]);
+            if (rotation) {
+                markGestureDetected(idx);
+                uiGesture.innerText = rotation;
+            }
+        }
+
+        previousHands[idx] = cloneHand(hand);
+        lastDetectedGesture[idx] = matchedGesture;
+    });
+
+    if (currentHands.length >= 2 && canDetectDualGesture()) {
+        const hand1 = currentHands[0];
+        const hand2 = currentHands[1];
+        let matchedDualGesture = null;
+
+        const distance = detectHandsDistance(hand1, hand2);
+
+        if (distance === 'TOUCHING') {
+            matchedDualGesture = 'TOUCHING';
+            markDualGestureDetected();
+            hasPrimaryGesture = true;
+            createShockwave(mapToCanvas(hand1[0]), themes[currentTheme](time, 0, 2));
+            triggerHaptic(60);
+            uiGesture.innerText = 'TOUCHING!';
+            handleDualGestureMusicAction(matchedDualGesture, () => withLoadedTrack(() => seekTrack(SEEK_STEP_SECONDS)));
+        } else if (distance === 'CLOSE') {
+            uiGesture.innerText = 'CLOSE!';
+        } else if (distance === 'MEDIUM') {
+            uiGesture.innerText = 'MEDIUM';
+        }
+
+        if (detectHandsCrossing(hand1, hand2)) {
+            matchedDualGesture = 'CROSSING';
+            markDualGestureDetected();
+            hasPrimaryGesture = true;
+            triggerHaptic(35);
+            uiGesture.innerText = 'CROSSING!';
+            handleDualGestureMusicAction(matchedDualGesture, () => withLoadedTrack(() => seekTrack(-SEEK_STEP_SECONDS)));
+        }
+
+        lastDualGesture = matchedDualGesture;
+    } else if (currentHands.length < 2) {
+        lastDualGesture = null;
+    }
+
+    if (currentHands[0]) {
+        const spread = getDist(currentHands[0][8], currentHands[0][20]);
+        const spreadPct = Math.min(Math.round(spread * 300), 100);
+        uiSpread.innerText = `${spreadPct}%`;
+
+        if (!hasPrimaryGesture) {
+            if (detectFist(currentHands[0])) {
+                uiGesture.innerText = 'FIST';
+            } else if (detectOpenPalm(currentHands[0])) {
+                uiGesture.innerText = 'OPEN';
+            }
+        }
+    }
+}
+
+/**
+ * EFFECTS & PHYSICS
+ */
+function createParticles(pos, color, count = 3) {
+    if (!settings.particlesEnabled) return;
+    if (particles.length > settings.particleCount) return; // Don't exceed limit
+    
+    for (let i=0; i<count; i++) {
+        particles.push({
+            x: pos.x,
+            y: pos.y,
+            vx: (Math.random() - 0.5) * 8,
+            vy: (Math.random() - 0.5) * 8,
+            life: 1.0,
+            color: color,
+            size: Math.random() * 3 + 1
+        });
+    }
+}
+
+function createShockwave(pos, color) {
+    ripples.push({
+        x: pos.x,
+        y: pos.y,
+        radius: 0,
+        maxRadius: 150 + Math.random() * 100,
+        life: 1.0,
+        color: color
+    });
+}
+
+// Background Effect Engine
+function drawBackground() {
+    // Use destination-out to fade out the previous frame's drops, leaving a transparent trail
+    bgCtx.globalCompositeOperation = 'destination-out';
+    bgCtx.fillStyle = `rgba(0, 0, 0, ${0.15 + Math.min(handVelocities*10, 0.5)})`;
+    bgCtx.fillRect(0, 0, width, height);
+    bgCtx.globalCompositeOperation = 'source-over';
+
+    // Matrix Rain Effect mapping to hand speed
+    bgCtx.fillStyle = themes[currentTheme](time, 1, 1);
+    bgCtx.font = fontSize + "px monospace";
+    
+    // Matrix speed boosts when hands move fast
+    let speedMult = 1 + (handVelocities * 100);
+
+    for (let i = 0; i < matrixColumns.length; i++) {
+        // Only draw randomly to keep it sparse like stars/rain
+        if (Math.random() > 0.95) {
+            const char = String.fromCharCode(0x30A0 + Math.random() * 96);
+            bgCtx.fillText(char, i * fontSize, matrixColumns[i] * fontSize);
+        }
+        
+        matrixColumns[i] += Math.random() * speedMult;
+        
+        if (matrixColumns[i] * fontSize > height && Math.random() > 0.9) {
+            matrixColumns[i] = 0;
+        }
+    }
+}
+
+function updatePhysics() {
+    // Particles
+    for (let i = particles.length - 1; i >= 0; i--) {
+        let p = particles[i];
+        p.x += p.vx;
+        p.y += p.vy;
+        p.life -= 0.02;     // Fade out
+        p.vy += 0.1;        // Gravity
+        
+        if (p.life <= 0) {
+            particles.splice(i, 1);
+        } else {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life;
+            ctx.fill();
+        }
+    }
+    
+    // Ripples / Shockwaves
+    for (let i = ripples.length - 1; i >= 0; i--) {
+        let r = ripples[i];
+        r.radius += (r.maxRadius - r.radius) * 0.1; // Ease out
+        r.life -= 0.03;
+        
+        if (r.life <= 0) {
+            ripples.splice(i, 1);
+        } else {
+            ctx.beginPath();
+            ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+            ctx.strokeStyle = r.color;
+            ctx.lineWidth = 4 * r.life;
+            ctx.globalAlpha = r.life;
+            ctx.stroke();
+        }
+    }
+    ctx.globalAlpha = 1.0; // Reset
+}
+
+/**
+ * MAIN RENDER PIPELINE
+ */
+function renderLoop(timestamp) {
+    requestAnimationFrame(renderLoop);
+    
+    let dt = (timestamp - lastTime) / 1000;
+    lastTime = timestamp;
+    time += dt;
+
+    // Update FPS Counter
+    framesThisSecond++;
+    if (timestamp > lastFpsTime + 1000) {
+        uiFps.innerText = framesThisSecond;
+        perfMetrics.fps = framesThisSecond;
+        framesThisSecond = 0;
+        lastFpsTime = timestamp;
+    }
+
+    const frameStartTime = performance.now();
+
+    // Clear trail canvas
+    trailCtx.globalCompositeOperation = 'destination-out';
+    trailCtx.fillStyle = `rgba(0, 0, 0, 0.1)`;
+    trailCtx.fillRect(0, 0, width, height);
+    trailCtx.globalCompositeOperation = 'source-over';
+
+    drawBackground();
+
+    // The main canvas will clear fully each frame since we handle ghosting via bgCanvas 
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
+    ctx.fillRect(0, 0, width, height);
+
+    // Enable Screen mode for additive light effects (like neon bloom)
+    ctx.globalCompositeOperation = 'screen'; // Creates glowy overlapping effects
+
+    // Render Physics layer
+    updatePhysics();
+
+    // Process Hand Logic if present
+    if (currentHands.length > 0) {
+        
+        // Apply hand smoothing
+        currentHands = currentHands.map((hand, idx) => smoothLandmarks(hand, idx));
+        
+        // Draw Trails
+        drawTrails();
+        
+        // 1. Draw Skeleton
+        currentHands.forEach((hand, handIndex) => {
+            const glowColor = themes[currentTheme](time, handIndex, 2);
+            
+            // Draw MediaPipe skeleton connectors using custom styles
+            drawConnectors(ctx, hand, HAND_CONNECTIONS, {
+                color: glowColor,
+                lineWidth: 2
+            });
+            
+            // Draw Landmarks with neon bloom
+            ctx.shadowBlur = 15;
+            ctx.shadowColor = glowColor;
+            
+            // Only draw fingertips with intense bloom and spawn particles
+            FINGER_TIPS.forEach((tipIndex, idx) => {
+                const pt = mapToCanvas(hand[tipIndex]);
+                const tipCol = themes[currentTheme](time, idx, FINGER_TIPS.length);
+                
+                ctx.beginPath();
+                ctx.arc(pt.x, pt.y, 4, 0, Math.PI * 2);
+                ctx.fillStyle = '#fff';
+                ctx.fill();
+
+                // Generate constant spark particles at fingertips
+                if (Math.random() > 0.6 && settings.particlesEnabled) {
+                    createParticles(pt, tipCol, 1);
+                }
+            });
+            ctx.shadowBlur = 0; // Reset
+            
+            // Update finger notes audio
+            updateFingerNotes(hand);
+        });
+
+        // 2. Cross-Hand Interactions (Lightning & Gradients)
+        if (currentHands.length >= 2) {
+            const h1 = currentHands[0];
+            const h2 = currentHands[1];
+
+            // A. Rainbow Connecting Lines
+            FINGER_TIPS.forEach((tipIndex, idx) => {
+                const pt1 = mapToCanvas(h1[tipIndex]);
+                const pt2 = mapToCanvas(h2[tipIndex]);
+                const dist = getDist(pt1, pt2);
+                
+                const col = themes[currentTheme](time, idx, FINGER_TIPS.length);
+                
+                // Lightning electric arc when very close (but not touching)
+                if (dist < 150 && Math.random() > 0.5) {
+                    // Draw jagged lightning
+                    ctx.beginPath();
+                    ctx.moveTo(pt1.x, pt1.y);
+                    // Midpoint jitter
+                    const midX = (pt1.x + pt2.x)/2 + (Math.random() - 0.5) * 50;
+                    const midY = (pt1.y + pt2.y)/2 + (Math.random() - 0.5) * 50;
+                    ctx.lineTo(midX, midY);
+                    ctx.lineTo(pt2.x, pt2.y);
+                    
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.shadowBlur = 20;
+                    ctx.shadowColor = col;
+                    ctx.lineWidth = 3;
+                    ctx.stroke();
+                }
+
+                // Normal flowing gradient line
+                ctx.beginPath();
+                ctx.moveTo(pt1.x, pt1.y);
+                ctx.lineTo(pt2.x, pt2.y);
+                
+                // Create gradient that shifts over time
+                let grad = ctx.createLinearGradient(pt1.x, pt1.y, pt2.x, pt2.y);
+                grad.addColorStop(0, themes[currentTheme](time, idx, 5));
+                grad.addColorStop(0.5, themes[currentTheme](time, idx + 1, 5));
+                grad.addColorStop(1, themes[currentTheme](time, idx + 2, 5));
+                
+                ctx.strokeStyle = grad;
+                ctx.lineWidth = 4;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = col;
+                ctx.stroke();
+                ctx.shadowBlur = 0;
+            });
+
+            // B. Mandala drawing if 10 tips are perfectly detected
+            if (h1 && h2) {
+                // Combine all 10 tips
+                let allTips = FINGER_TIPS.map(t => mapToCanvas(h1[t])).concat(
+                              FINGER_TIPS.map(t => mapToCanvas(h2[t])) );
+                
+                ctx.save();
+                // Find center point to draw Mandala
+                let cx = allTips.reduce((sum, p) => sum + p.x, 0) / 10;
+                let cy = allTips.reduce((sum, p) => sum + p.y, 0) / 10;
+                
+                ctx.translate(cx, cy);
+                ctx.rotate(time * 0.5); // Slow rotation
+                
+                ctx.beginPath();
+                for (let i=0; i<10; i++) {
+                    const t1 = { x: allTips[i].x - cx, y: allTips[i].y - cy };
+                    const t2 = { x: allTips[(i+3)%10].x - cx, y: allTips[(i+3)%10].y - cy };
+                    ctx.moveTo(t1.x, t1.y);
+                    ctx.lineTo(t2.x, t2.y);
+                }
+                ctx.strokeStyle = `rgba(255, 255, 255, 0.2)`;
+                ctx.lineWidth = 1;
+                ctx.stroke();
+                ctx.restore();
+            }
+        }
+        
+        detectGestures();
+    } else {
+        // Clear trails when no hands detected
+        handTrails = [[], []];
+        lastDetectedGesture = [null, null];
+        lastDualGesture = null;
+        uiSpread.innerText = '0%';
+        updateFingerNotes(null);
+    }
+    
+    ctx.globalCompositeOperation = 'source-over'; // Restore
+    
+    // Update performance metrics
+    perfMetrics.frameTime = performance.now() - frameStartTime;
+    perfMetrics.particleCount = particles.length;
+    
+    // Check memory usage periodically
+    if (timestamp - lastMemoryCheck > 5000 && performance.memory) {
+        perfMetrics.memory = performance.memory.usedJSHeapSize / 1048576; // Convert to MB
+        lastMemoryCheck = timestamp;
+    }
+    
+    updatePerfMonitor();
+}
+
+/**
+ * MEDIAPIPE INITIALIZATION
+ */
+function initMediaPipe() {
+    const hands = new Hands({locateFile: (file) => {
+        return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+    }});
+
+    hands.setOptions({
+        maxNumHands: 2,
+        modelComplexity: 1, 
+        minDetectionConfidence: 0.7,
+        minTrackingConfidence: 0.7
+    });
+
+    hands.onResults((results) => {
+        if (!audioCtx) return; // Wait for initialization
+
+        // Update global state for render loop to read from
+        uiHands.innerText = results.multiHandLandmarks ? results.multiHandLandmarks.length : 0;
+        
+        // Calculate velocity (rudimentary)
+        if (currentHands.length > 0 && results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+            let vSum = 0;
+            // check distance difference on index finger of hand 0 
+            const oldP = currentHands[0][8];
+            const newP = results.multiHandLandmarks[0][8];
+            if (oldP && newP) {
+                vSum += getDist(oldP, newP);
+                handVelocities = vSum; 
+            }
+        } else {
+            handVelocities = 0;
+        }
+
+        // Store raw landmarks; render loop applies smoothing once.
+        if (results.multiHandLandmarks) {
+            currentHands = results.multiHandLandmarks;
+        } else {
+            currentHands = [];
+        }
+        
+        updateHum(currentHands);
+    });
+
+    const camera = new Camera(videoElement, {
+        onFrame: async () => {
+            await hands.send({image: videoElement});
+        },
+        width: 1280,
+        height: 720,
+        facingMode: 'user'
+    });
+    
+    camera.start();
+}
+
+</script>
+</body>
+</html>

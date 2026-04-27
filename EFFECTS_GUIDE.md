@@ -114,7 +114,9 @@ Recommended color combinations by gesture type:
 | **Thumbs Down** | `#ff0000` | `#ff0000` | Blast Wave |
 | **Point Up** | `#00ffff` | `#00ffff` | Lightning Bolt |
 | **Point Right** | `#00ffff` | `#00ffff` | Lightning Bolt |
-
+| **Peace** | `#00ff00` | `#00ff00` | Lightning |
+| **Love** | `#ff1493` | `#ff69b4` | Shockwave |
+| **Holy** | `#ffff00` | `#ffd700` | Lightning |
 ---
 
 ## 🎬 Current Gesture Effects

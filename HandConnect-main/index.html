@@ -812,6 +812,8 @@ const themes = {
 // Physics Engines Data
 let particles = [];
 let ripples = [];
+let lightningBolts = [];
+let explosions = [];
 const FINGER_TIPS = [4, 8, 12, 16, 20];
 
 // Trail System
@@ -1146,8 +1148,9 @@ function runMusicAction(actionKey, callback, cooldown = MUSIC_ACTION_COOLDOWN) {
 }
 
 function handleGestureMusicAction(handIdx, gestureKey, callback) {
+    // Only trigger if gesture just changed (was null before)
     if (lastDetectedGesture[handIdx] === gestureKey) {
-        return false;
+        return false; // Gesture hasn't changed, don't trigger
     }
 
     return runMusicAction(gestureKey, callback);
@@ -1271,7 +1274,9 @@ function markDualGestureDetected() {
 function detectPinch(hand) {
     const thumb = hand[4];
     const index = hand[8];
-    return getDist(thumb, index) < 0.05;
+    const distance = getDist(thumb, index);
+    // Pinch threshold: thumb and index tips very close together
+    return distance < 0.06;
 }
 
 function detectPeaceSign(hand) {
@@ -1352,19 +1357,23 @@ function detectPointingUp(hand) {
 function detectPointingRight(hand) {
     // Only index finger extended to the right
     const indexExt = getDist(hand[8], hand[6]) > 0.1;
-    const othersClosed = [12, 16, 20].every(idx => getDist(hand[idx], hand[0]) < 0.08);
+    const middleClosed = getDist(hand[12], hand[10]) < 0.08;
+    const ringClosed = getDist(hand[16], hand[14]) < 0.08;
+    const pinkyClosed = getDist(hand[20], hand[18]) < 0.08;
+    const thumbClose = getDist(hand[4], hand[2]) < 0.1;
     const indexToRight = hand[8].x > hand[0].x + 0.15; // Extended to the right
     
-    return indexExt && othersClosed && indexToRight;
+    return indexExt && middleClosed && ringClosed && pinkyClosed && thumbClose && indexToRight;
 }
 
 function detectOKSign(hand) {
     const thumbIndexDistance = getDist(hand[4], hand[8]);
-    const otherFingersClosed = [12, 16, 20].every(idx =>
+    // Other fingers should be extended (not closed to palm)
+    const otherFingersExtended = [12, 16, 20].every(idx =>
         getDist(hand[idx], hand[0]) > 0.1
     );
     
-    return thumbIndexDistance < 0.05 && otherFingersClosed;
+    return thumbIndexDistance < 0.05 && otherFingersExtended;
 }
 
 function detectThumbsDown(hand) {
@@ -1571,6 +1580,8 @@ function toggleHUD() {
 function resetEffects() {
     particles = [];
     ripples = [];
+    lightningBolts = [];
+    explosions = [];
     handTrails = [[], []];
 }
 
@@ -1861,6 +1872,38 @@ function triggerZap() {
     osc.stop(audioCtx.currentTime + 0.15);
 }
 
+function triggerThunder() {
+    if (!audioCtx) return;
+    const now = audioCtx.currentTime;
+    
+    // Deep rumble
+    const rumble = audioCtx.createOscillator();
+    const rumbleGain = audioCtx.createGain();
+    rumble.type = 'sine';
+    rumble.frequency.value = 40;
+    rumbleGain.gain.setValueAtTime(0.3, now);
+    rumbleGain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+    
+    rumble.connect(rumbleGain);
+    rumbleGain.connect(audioMasterGain || audioCtx.destination);
+    rumble.start(now);
+    rumble.stop(now + 0.6);
+    
+    // High-pitched crack
+    const crack = audioCtx.createOscillator();
+    const crackGain = audioCtx.createGain();
+    crack.type = 'sawtooth';
+    crack.frequency.setValueAtTime(300, now);
+    crack.frequency.exponentialRampToValueAtTime(80, now + 0.2);
+    crackGain.gain.setValueAtTime(0.5, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+    
+    crack.connect(crackGain);
+    crackGain.connect(audioMasterGain || audioCtx.destination);
+    crack.start(now);
+    crack.stop(now + 0.2);
+}
+
 function updateHum(activeHands) {
     if (!audioCtx || !humGain) return;
     if (activeHands.length < 2) {
@@ -2120,282 +2163,301 @@ function detectGesturesLegacy() {
 }
 
 function detectGestures() {
-    if (!currentHands.length) return;
+    if (!currentHands.length) {
+        // Reset gesture states when no hands detected
+        lastDetectedGesture = [null, null];
+        previousHands = [null, null];
+        lastGestureTime = [0, 0];
+        lastDualGestureTime = 0;
+        return;
+    }
+    
     let hasPrimaryGesture = false;
 
     currentHands.forEach((hand, idx) => {
-        if (!canDetectGesture(idx)) return;
-
         const handPos = mapToCanvas(hand[0]);
         const glowColor = themes[currentTheme](time, idx, 2);
         let matchedGesture = null;
-
-        if (detectPinch(hand)) {
-            matchedGesture = 'PINCH';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            const midpoint = {
-                x: (hand[4].x + hand[8].x) / 2,
-                y: (hand[4].y + hand[8].y) / 2
-            };
-            createShockwave(mapToCanvas(midpoint), glowColor);
-            triggerZap();
-            triggerHaptic(30);
-            uiGesture.innerText = 'PINCH!';
-            createParticles(mapToCanvas(midpoint), glowColor, 8);
-            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(togglePlayback));
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
+        let gestureTriggered = false;
+        
+        // Only check for new gestures if cooldown has passed
+        if (canDetectGesture(idx)) {
+            if (detectPinch(hand)) {
+                matchedGesture = 'PINCH';
+                gestureTriggered = true;
+                const midpoint = {
+                    x: (hand[4].x + hand[8].x) / 2,
+                    y: (hand[4].y + hand[8].y) / 2
+                };
+                const pinchPos = mapToCanvas(midpoint);
+                // Enhanced: Pinch creates a focused lightning blast
+                createLightningBolt(pinchPos, { 
+                    x: pinchPos.x + 100, 
+                    y: pinchPos.y - 100 
+                }, '#ff00ff', 3);
+                createShockwave(pinchPos, '#ff00ff');
+                triggerZap();
+                triggerHaptic(30);
+                uiGesture.innerText = 'PINCH!';
+                createParticles(pinchPos, '#ff00ff', 8);
+                handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(togglePlayback));
+            } else if (detectRockSign(hand)) {
+                matchedGesture = 'ROCK';
+                gestureTriggered = true;
+                // Enhanced: Thunder impact
+                createThunderEffect(handPos, '#ffcc00');
+                createShockwave(handPos, '#ffaa00');
+                triggerHaptic(40);
+                uiGesture.innerText = 'ROCK!';
+                createParticles(handPos, '#ffaa00', 6);
+            } else if (detectPaperSign(hand)) {
+                matchedGesture = 'PAPER';
+                gestureTriggered = true;
+                // Enhanced: Shockwave spread
+                createParticles(handPos, glowColor, 12);
+                createShockwave(handPos, glowColor);
+                triggerHaptic(25);
+                uiGesture.innerText = 'PAPER!';
+            } else if (detectScissorsSign(hand)) {
+                matchedGesture = 'SCISSORS';
+                gestureTriggered = true;
+                // Enhanced: Twin lightning bolts
+                const indexPos = mapToCanvas(hand[8]);
+                const middlePos = mapToCanvas(hand[12]);
+                createLightningBolt(indexPos, { x: indexPos.x, y: indexPos.y - 250 }, '#00ffff', 2);
+                createLightningBolt(middlePos, { x: middlePos.x, y: middlePos.y - 250 }, '#00ffff', 2);
+                triggerZap();
+                triggerHaptic(35);
+                uiGesture.innerText = 'SCISSORS!';
+            } else if (detectVictorySign(hand)) {
+                matchedGesture = 'VICTORY';
+                gestureTriggered = true;
+                createParticles(mapToCanvas(hand[8]), glowColor, 8);
+                triggerHaptic(45);
+                uiGesture.innerText = 'VICTORY!';
+                createShockwave(handPos, glowColor);
+                handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(toggleLoopMode));
+            } else if (detectPeaceSign(hand)) {
+                matchedGesture = 'PEACE';
+                gestureTriggered = true;
+                // Enhanced: V-shaped peace energy
+                const indexPos = mapToCanvas(hand[8]);
+                const middlePos = mapToCanvas(hand[12]);
+                createLightningBolt(indexPos, middlePos, '#00ff00', 1);
+                createParticles(indexPos, '#00ff00', 5);
+                triggerHaptic(30);
+                uiGesture.innerText = 'PEACE!';
+            } else if (detectThumbsUp(hand)) {
+                matchedGesture = 'THUMBS_UP';
+                gestureTriggered = true;
+                // Enhanced: Upward energy burst
+                const thumbPos = mapToCanvas(hand[4]);
+                createElectricArc(thumbPos, -Math.PI / 2, '#00ff00');
+                triggerZap();
+                triggerHaptic(50);
+                uiGesture.innerText = 'BOOST!';
+                createParticles(thumbPos, '#00ff00', 10);
+                handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => {
+                    syncAudioVolume(settings.audioVolume + 0.1);
+                    updatePlayerUI('Volume up');
+                    return true;
+                }));
+            } else if (detectThumbsDown(hand)) {
+                matchedGesture = 'THUMBS_DOWN';
+                gestureTriggered = true;
+                // Enhanced: Downward energy
+                const thumbPos = mapToCanvas(hand[4]);
+                createBlastWave(thumbPos, '#ff0000', 180);
+                triggerHaptic(40);
+                uiGesture.innerText = 'DOWN!';
+                createParticles(thumbPos, '#ff0000', 7);
+                handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => {
+                    syncAudioVolume(settings.audioVolume - 0.1);
+                    updatePlayerUI('Volume down');
+                    return true;
+                }));
+            } else if (detectPointingUp(hand)) {
+                matchedGesture = 'POINT_UP';
+                gestureTriggered = true;
+                // Enhanced: Lightning pointing up
+                const indexPos = mapToCanvas(hand[8]);
+                createLightningBolt(indexPos, { x: indexPos.x, y: indexPos.y - 200 }, '#00ffff', 2);
+                triggerZap();
+                triggerHaptic(20);
+                uiGesture.innerText = 'POINT UP!';
+                handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => changeTrack(-1)));
+            } else if (detectPointingRight(hand)) {
+                matchedGesture = 'POINT_RIGHT';
+                gestureTriggered = true;
+                // Enhanced: Lightning pointing right
+                const indexPos = mapToCanvas(hand[8]);
+                createLightningBolt(indexPos, { x: indexPos.x + 200, y: indexPos.y }, '#00ffff', 2);
+                triggerZap();
+                triggerHaptic(20);
+                uiGesture.innerText = 'POINT RIGHT!';
+                handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => changeTrack(1)));
+            } else if (detectSpock(hand)) {
+                matchedGesture = 'SPOCK';
+                gestureTriggered = true;
+                // Enhanced: Electric arcs radiating outward
+                createElectricArc(handPos, time * 2, '#00ffff');
+                createParticles(handPos, '#00ffff', 15);
+                triggerZap();
+                triggerHaptic(60);
+                uiGesture.innerText = 'SPOCK!';
+            } else if (detectGun(hand)) {
+                matchedGesture = 'GUN';
+                gestureTriggered = true;
+                // Enhanced: Lightning bolt from finger
+                const fingerPos = mapToCanvas(hand[8]);
+                createLightningBolt(fingerPos, { 
+                    x: fingerPos.x + (Math.random() - 0.5) * 300, 
+                    y: fingerPos.y - 300 
+                }, '#ffff00', 3);
+                triggerZap();
+                triggerHaptic(45);
+                uiGesture.innerText = 'BANG!';
+                createShockwave(fingerPos, '#ff8800');
+            } else if (detectClaw(hand)) {
+                matchedGesture = 'CLAW';
+                gestureTriggered = true;
+                // Enhanced: Blast wave explosion
+                createBlastWave(handPos, '#ff00ff', 250);
+                triggerThunder();
+                triggerHaptic(50);
+                uiGesture.innerText = 'CLAW!';
+            } else if (detectRockSign(hand)) {
+                matchedGesture = 'ROCK';
+                gestureTriggered = true;
+                // Enhanced: Thunder impact
+                createThunderEffect(handPos, '#ffcc00');
+                createShockwave(handPos, '#ffaa00');
+                triggerHaptic(40);
+                uiGesture.innerText = 'ROCK!';
+                createParticles(handPos, '#ffaa00', 6);
+            } else if (detectScissorsSign(hand)) {
+                matchedGesture = 'SCISSORS';
+                gestureTriggered = true;
+                // Enhanced: Twin lightning bolts
+                const indexPos = mapToCanvas(hand[8]);
+                const middlePos = mapToCanvas(hand[12]);
+                createLightningBolt(indexPos, { x: indexPos.x, y: indexPos.y - 250 }, '#00ffff', 2);
+                createLightningBolt(middlePos, { x: middlePos.x, y: middlePos.y - 250 }, '#00ffff', 2);
+                triggerZap();
+                triggerHaptic(35);
+                uiGesture.innerText = 'SCISSORS!';
+            } else if (detectVictorySign(hand)) {
+                matchedGesture = 'VICTORY';
+                gestureTriggered = true;
+                // Enhanced: Lightning arcs around fingers
+                const indexPos = mapToCanvas(hand[8]);
+                const middlePos = mapToCanvas(hand[12]);
+                createLightningBolt(indexPos, middlePos, '#00ff00', 2);
+                createLightningBolt(middlePos, indexPos, '#00ff00', 2);
+                createParticles(indexPos, '#00ff00', 8);
+                createParticles(middlePos, '#00ff00', 8);
+                triggerZap();
+                triggerHaptic(45);
+                uiGesture.innerText = 'VICTORY!';
+                createShockwave(handPos, '#00ff00');
+                handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(toggleLoopMode));
+            } else if (detectLoveSign(hand)) {
+                matchedGesture = 'LOVE';
+                gestureTriggered = true;
+                // Enhanced: Pink heart explosion
+                createParticles(handPos, '#ff69b4', 15);
+                createShockwave(handPos, '#ff69b4');
+                triggerHaptic(35);
+                uiGesture.innerText = 'LOVE!';
+            } else if (detectHolySign(hand)) {
+                matchedGesture = 'HOLY';
+                gestureTriggered = true;
+                // Enhanced: Spiritual glow effect
+                const indexPos = mapToCanvas(hand[8]);
+                const middlePos = mapToCanvas(hand[12]);
+                createLightningBolt(indexPos, middlePos, '#ffff00', 1.5);
+                createParticles(handPos, '#ffff00', 10);
+                triggerHaptic(40);
+                uiGesture.innerText = 'HOLY!';
+            } else if (detectThreeFingers(hand)) {
+                matchedGesture = 'THREE';
+                gestureTriggered = true;
+                // Enhanced: Triple spark effect
+                createParticles(handPos, glowColor, 9);
+                createShockwave(handPos, glowColor);
+                triggerHaptic(30);
+                uiGesture.innerText = 'THREE!';
+            } else if (detectFour(hand)) {
+                matchedGesture = 'FOUR';
+                gestureTriggered = true;
+                // Enhanced: Quad burst
+                createParticles(handPos, glowColor, 11);
+                createShockwave(handPos, glowColor);
+                triggerHaptic(35);
+                uiGesture.innerText = 'FOUR!';
+            } else if (detectOKSign(hand)) {
+                matchedGesture = 'OK';
+                gestureTriggered = true;
+                // Enhanced: OK circle glow
+                createParticles(mapToCanvas(hand[8]), glowColor, 3);
+                createShockwave(mapToCanvas(hand[8]), glowColor);
+                triggerHaptic(25);
+                uiGesture.innerText = 'OK!';
+                handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(toggleMute));
+            }
+            
+            // Mark gesture if one was detected
+            if (gestureTriggered) {
+                markGestureDetected(idx);
+                hasPrimaryGesture = true;
+            }
         }
-
-        if (detectRockSign(hand)) {
-            matchedGesture = 'ROCK';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createShockwave(handPos, glowColor);
-            triggerHaptic(40);
-            uiGesture.innerText = 'ROCK!';
-            createParticles(handPos, glowColor, 6);
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectPaperSign(hand)) {
-            matchedGesture = 'PAPER';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createParticles(handPos, glowColor, 12);
-            triggerHaptic(25);
-            uiGesture.innerText = 'PAPER!';
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectScissorsSign(hand)) {
-            matchedGesture = 'SCISSORS';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createShockwave(handPos, glowColor);
-            triggerZap();
-            triggerHaptic(35);
-            uiGesture.innerText = 'SCISSORS!';
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectVictorySign(hand)) {
-            matchedGesture = 'VICTORY';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createParticles(mapToCanvas(hand[8]), glowColor, 8);
-            triggerHaptic(45);
-            uiGesture.innerText = 'VICTORY!';
-            createShockwave(handPos, glowColor);
-            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(toggleLoopMode));
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectPeaceSign(hand)) {
-            matchedGesture = 'PEACE';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createParticles(mapToCanvas(hand[8]), glowColor, 5);
-            triggerHaptic(30);
-            uiGesture.innerText = 'PEACE!';
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectThumbsUp(hand)) {
-            matchedGesture = 'THUMBS_UP';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createShockwave(mapToCanvas(hand[4]), glowColor);
-            triggerHaptic(50);
-            uiGesture.innerText = 'BOOST!';
-            createParticles(mapToCanvas(hand[4]), glowColor, 10);
-            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => {
-                syncAudioVolume(settings.audioVolume + 0.1);
-                updatePlayerUI('Volume up');
-                return true;
-            }));
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectThumbsDown(hand)) {
-            matchedGesture = 'THUMBS_DOWN';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            triggerHaptic(40);
-            uiGesture.innerText = 'DOWN!';
-            createParticles(mapToCanvas(hand[4]), glowColor, 7);
-            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => {
-                syncAudioVolume(settings.audioVolume - 0.1);
-                updatePlayerUI('Volume down');
-                return true;
-            }));
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectPointingUp(hand)) {
-            matchedGesture = 'POINT_UP';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            triggerHaptic(20);
-            uiGesture.innerText = 'POINT UP!';
-            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => changeTrack(-1)));
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectPointingRight(hand)) {
-            matchedGesture = 'POINT_RIGHT';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            triggerHaptic(20);
-            uiGesture.innerText = 'POINT RIGHT!';
-            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => changeTrack(1)));
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectSpock(hand)) {
-            matchedGesture = 'SPOCK';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createShockwave(handPos, glowColor);
-            createParticles(handPos, glowColor, 12);
-            triggerHaptic(60);
-            uiGesture.innerText = 'SPOCK!';
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectLoveSign(hand)) {
-            matchedGesture = 'LOVE';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createParticles(handPos, '#ff69b4', 15);
-            triggerHaptic(35);
-            uiGesture.innerText = 'LOVE!';
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectClaw(hand)) {
-            matchedGesture = 'CLAW';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createShockwave(handPos, glowColor);
-            triggerHaptic(50);
-            uiGesture.innerText = 'CLAW!';
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectHolySign(hand)) {
-            matchedGesture = 'HOLY';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createParticles(handPos, glowColor, 10);
-            triggerHaptic(40);
-            uiGesture.innerText = 'HOLY!';
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectGun(hand)) {
-            matchedGesture = 'GUN';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            triggerZap();
-            triggerHaptic(45);
-            uiGesture.innerText = 'BANG!';
-            createShockwave(mapToCanvas(hand[8]), glowColor);
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectThreeFingers(hand)) {
-            matchedGesture = 'THREE';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createParticles(handPos, glowColor, 9);
-            triggerHaptic(30);
-            uiGesture.innerText = 'THREE!';
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectFour(hand)) {
-            matchedGesture = 'FOUR';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createParticles(handPos, glowColor, 11);
-            triggerHaptic(35);
-            uiGesture.innerText = 'FOUR!';
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        if (detectOKSign(hand)) {
-            matchedGesture = 'OK';
-            markGestureDetected(idx);
-            hasPrimaryGesture = true;
-            createParticles(mapToCanvas(hand[8]), glowColor, 3);
-            triggerHaptic(25);
-            uiGesture.innerText = 'OK!';
-            handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(toggleMute));
-            previousHands[idx] = cloneHand(hand);
-            lastDetectedGesture[idx] = matchedGesture;
-            return;
-        }
-
-        const handSize = detectHandSize(hand);
-        if (handSize === 'LARGE') {
-            uiGesture.innerText = 'LARGE';
-        } else if (handSize === 'SMALL') {
-            uiGesture.innerText = 'SMALL';
-        }
-
-        if (previousHands[idx]) {
+        
+        // Check hand dynamics if no primary gesture detected
+        if (!gestureTriggered && previousHands[idx]) {
             const tilt = detectHandTilt(hand, previousHands[idx]);
             if (tilt) {
-                markGestureDetected(idx);
-                uiGesture.innerText = tilt;
+                matchedGesture = `TILT_${tilt}`;
+                const tiltEmojis = { 'UP': '⬆️', 'DOWN': '⬇️', 'LEFT': '⬅️', 'RIGHT': '➡️' };
+                uiGesture.innerText = `${tiltEmojis[tilt]} ${tilt}`;
             }
 
             const rotation = detectHandRotation(hand, previousHands[idx]);
             if (rotation) {
-                markGestureDetected(idx);
-                uiGesture.innerText = rotation;
+                matchedGesture = rotation;
+                const rotEmoji = rotation === 'CLOCKWISE' ? '🔄' : '🔃';
+                uiGesture.innerText = `${rotEmoji} ${rotation}`;
             }
         }
 
+        // Update hand size UI (fallback if no gesture detected)
+        if (!gestureTriggered && !matchedGesture) {
+            const handSize = detectHandSize(hand);
+            if (handSize === 'LARGE') {
+                uiGesture.innerText = 'LARGE';
+            } else if (handSize === 'SMALL') {
+                uiGesture.innerText = 'SMALL';
+            } else if (detectFist(hand)) {
+                uiGesture.innerText = 'FIST';
+            } else if (detectOpenPalm(hand)) {
+                uiGesture.innerText = 'OPEN';
+            }
+        }
+        
+        // IMPORTANT: Always update state for this hand (cooldown or not)
         previousHands[idx] = cloneHand(hand);
-        lastDetectedGesture[idx] = matchedGesture;
+        // Only update lastDetectedGesture if a gesture was actually detected (not just hand position)
+        if (matchedGesture) {
+            lastDetectedGesture[idx] = matchedGesture;
+        } else if (!gestureTriggered) {
+            // Reset gesture if cooldown active but no gesture detected
+            if (!canDetectGesture(idx)) {
+                lastDetectedGesture[idx] = null;
+            }
+        }
     });
 
+    // Dual-hand gesture detection
     if (currentHands.length >= 2 && canDetectDualGesture()) {
         const hand1 = currentHands[0];
         const hand2 = currentHands[1];
@@ -2410,11 +2472,17 @@ function detectGestures() {
             createShockwave(mapToCanvas(hand1[0]), themes[currentTheme](time, 0, 2));
             triggerHaptic(60);
             uiGesture.innerText = 'TOUCHING!';
-            handleDualGestureMusicAction(matchedDualGesture, () => withLoadedTrack(() => seekTrack(SEEK_STEP_SECONDS)));
+            if (lastDualGesture !== matchedDualGesture) {
+                handleDualGestureMusicAction(matchedDualGesture, () => withLoadedTrack(() => seekTrack(SEEK_STEP_SECONDS)));
+            }
         } else if (distance === 'CLOSE') {
-            uiGesture.innerText = 'CLOSE!';
+            if (!hasPrimaryGesture) {
+                uiGesture.innerText = 'CLOSE!';
+            }
         } else if (distance === 'MEDIUM') {
-            uiGesture.innerText = 'MEDIUM';
+            if (!hasPrimaryGesture) {
+                uiGesture.innerText = 'MEDIUM';
+            }
         }
 
         if (detectHandsCrossing(hand1, hand2)) {
@@ -2423,7 +2491,9 @@ function detectGestures() {
             hasPrimaryGesture = true;
             triggerHaptic(35);
             uiGesture.innerText = 'CROSSING!';
-            handleDualGestureMusicAction(matchedDualGesture, () => withLoadedTrack(() => seekTrack(-SEEK_STEP_SECONDS)));
+            if (lastDualGesture !== matchedDualGesture) {
+                handleDualGestureMusicAction(matchedDualGesture, () => withLoadedTrack(() => seekTrack(-SEEK_STEP_SECONDS)));
+            }
         }
 
         lastDualGesture = matchedDualGesture;
@@ -2431,18 +2501,13 @@ function detectGestures() {
         lastDualGesture = null;
     }
 
+    // Update spread indicator for first hand
     if (currentHands[0]) {
         const spread = getDist(currentHands[0][8], currentHands[0][20]);
         const spreadPct = Math.min(Math.round(spread * 300), 100);
         uiSpread.innerText = `${spreadPct}%`;
-
-        if (!hasPrimaryGesture) {
-            if (detectFist(currentHands[0])) {
-                uiGesture.innerText = 'FIST';
-            } else if (detectOpenPalm(currentHands[0])) {
-                uiGesture.innerText = 'OPEN';
-            }
-        }
+    } else {
+        uiSpread.innerText = '0%';
     }
 }
 
@@ -2475,6 +2540,89 @@ function createShockwave(pos, color) {
         life: 1.0,
         color: color
     });
+}
+
+/**
+ * LIGHTNING EFFECTS
+ */
+function createLightningBolt(startPos, endPos, color = '#00ffff', thickness = 2) {
+    const segments = [];
+    const numSegments = 20;
+    
+    for (let i = 0; i < numSegments; i++) {
+        const t = i / numSegments;
+        const baseX = startPos.x + (endPos.x - startPos.x) * t;
+        const baseY = startPos.y + (endPos.y - startPos.y) * t;
+        
+        // Add jitter perpendicular to the line
+        const jitter = (Math.random() - 0.5) * 30;
+        
+        segments.push({
+            x: baseX + jitter * Math.sin(t * Math.PI),
+            y: baseY + Math.cos(t * Math.PI) * jitter
+        });
+    }
+    
+    lightningBolts.push({
+        segments: segments,
+        life: 1.0,
+        color: color,
+        thickness: thickness,
+        glow: 20
+    });
+}
+
+function createThunderEffect(pos, color = '#ffff00') {
+    // Create bright explosion with shock
+    createParticles(pos, color, 25);
+    createShockwave(pos, color);
+    
+    // Add electrical particles radiating outward
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 8) {
+        const vx = Math.cos(angle) * 12;
+        const vy = Math.sin(angle) * 12;
+        particles.push({
+            x: pos.x,
+            y: pos.y,
+            vx: vx,
+            vy: vy,
+            life: 1.0,
+            color: color,
+            size: Math.random() * 4 + 2
+        });
+    }
+    
+    // Trigger thunder audio
+    triggerThunder();
+    triggerHaptic(80);
+}
+
+function createBlastWave(pos, color = '#ff00ff', radius = 200) {
+    // Multi-ring blast
+    for (let i = 0; i < 3; i++) {
+        setTimeout(() => {
+            ripples.push({
+                x: pos.x,
+                y: pos.y,
+                radius: 0,
+                maxRadius: radius - (i * 50),
+                life: 1.0,
+                color: color
+            });
+        }, i * 100);
+    }
+}
+
+function createElectricArc(pos, angle = 0, color = '#00ffff') {
+    // Create multiple lightning arcs radiating from center
+    const arcCount = 5;
+    for (let i = 0; i < arcCount; i++) {
+        const arcAngle = angle + (i * Math.PI * 2 / arcCount);
+        const endX = pos.x + Math.cos(arcAngle) * 200;
+        const endY = pos.y + Math.sin(arcAngle) * 200;
+        
+        createLightningBolt(pos, { x: endX, y: endY }, color, 3);
+    }
 }
 
 // Background Effect Engine
@@ -2544,6 +2692,51 @@ function updatePhysics() {
             ctx.stroke();
         }
     }
+    
+    // Lightning Bolts
+    for (let i = lightningBolts.length - 1; i >= 0; i--) {
+        let bolt = lightningBolts[i];
+        bolt.life -= 0.08;
+        
+        if (bolt.life <= 0) {
+            lightningBolts.splice(i, 1);
+        } else {
+            // Draw lightning with glow
+            ctx.shadowBlur = bolt.glow * bolt.life;
+            ctx.shadowColor = bolt.color;
+            
+            ctx.strokeStyle = bolt.color;
+            ctx.lineWidth = bolt.thickness * bolt.life;
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            ctx.beginPath();
+            const seg = bolt.segments[0];
+            ctx.moveTo(seg.x, seg.y);
+            
+            for (let j = 1; j < bolt.segments.length; j++) {
+                const nextSeg = bolt.segments[j];
+                ctx.lineTo(nextSeg.x, nextSeg.y);
+            }
+            
+            ctx.globalAlpha = bolt.life;
+            ctx.stroke();
+            
+            // Draw bright core
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = bolt.thickness * 0.4 * bolt.life;
+            ctx.globalAlpha = bolt.life * 0.8;
+            ctx.beginPath();
+            ctx.moveTo(bolt.segments[0].x, bolt.segments[0].y);
+            for (let j = 1; j < bolt.segments.length; j++) {
+                ctx.lineTo(bolt.segments[j].x, bolt.segments[j].y);
+            }
+            ctx.stroke();
+            
+            ctx.shadowBlur = 0;
+        }
+    }
+    
     ctx.globalAlpha = 1.0; // Reset
 }
 

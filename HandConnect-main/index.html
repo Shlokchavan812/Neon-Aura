@@ -479,7 +479,7 @@
     <!-- Start Overlay (Required for AudioContext initialization) -->
     <div id="startOverlay">
         <h1 style="margin-bottom: 20px; font-weight: 300; letter-spacing: 4px;">NEON AURA AR</h1>
-        <p style="margin-bottom: 40px; color: #888; max-width: 560px; text-align: center;">Grant camera permission, then use the demo tracks or add your own songs from Settings to control playback with gestures.</p>
+        <p style="margin-bottom: 40px; color: #888; max-width: 560px; text-align: center;">Grant camera permission, then use the demo tracks or add your own MP3 songs from Settings to control playback with gestures. Swipe left hand right for next track, left for previous. Rotate left palm clockwise to seek forward, counter-clockwise to seek back. Lower hand for more bass.</p>
         <button class="start-btn" id="startBtn">Enter Experience</button>
     </div>
 
@@ -499,6 +499,11 @@
         <div class="panel">
             <div class="stat">Gesture: <span class="val" id="ui-gesture">None</span></div>
             <div class="stat">Spread: <span class="val" id="ui-spread">0%</span></div>
+        </div>
+        <div class="panel">
+            <div class="stat">Filter: <span class="val" id="ui-filter">1kHz</span></div>
+            <div class="stat">Reverb: <span class="val" id="ui-reverb">0%</span></div>
+            <div class="stat">Delay: <span class="val" id="ui-delay">0%</span></div>
         </div>
         <div class="panel music-panel">
             <div class="stat">Track: <span class="val track-title" id="ui-track">No track loaded</span></div>
@@ -581,10 +586,30 @@
 
         <div class="settings-group">
             <div class="setting-label">
+                <span>Real-time Audio Effects</span>
+                <div class="toggle-btn active" data-setting="audioEffectsEnabled"></div>
+            </div>
+            <p style="margin-bottom: 10px; font-size: 0.8rem; color: rgba(255,255,255,0.72);">Enable gesture-controlled filter, EQ, reverb, and delay effects on music playback.</p>
+        </div>
+
+        <div class="settings-group">
+            <div class="setting-label">
+                <span>Audio Visualization</span>
+                <div class="toggle-btn active" data-setting="audioVisEnabled"></div>
+            </div>
+        </div>
+
+        <div class="settings-group">
+            <button class="player-btn" id="resetAudioEffectsBtn" style="width: 100%; margin-bottom: 8px;">Reset Audio Effects (E)</button>
+            <button class="player-btn" id="resetAllEffectsBtn" style="width: 100%;">Reset All Effects (R)</button>
+        </div>
+
+        <div class="settings-group">
+            <div class="setting-label">
                 <span>Music Library</span>
             </div>
-            <p style="margin-bottom: 10px; font-size: 0.8rem; color: rgba(255,255,255,0.72);">Three demo tracks are preloaded. Use this to add your own `mp3`, `wav`, or `m4a` files to the playlist.</p>
-            <label class="file-picker" for="playlistInput">Add your audio files</label>
+            <p style="margin-bottom: 10px; font-size: 0.8rem; color: rgba(255,255,255,0.72);">Three demo tracks are preloaded. Add your own MP3, WAV, or M4A files to control with AR gestures.</p>
+            <label class="file-picker" for="playlistInput">🎵 Add MP3/Audio Files</label>
             <input type="file" id="playlistInput" class="visually-hidden" accept="audio/*" multiple>
             <select id="playlistSelect" class="setting-input playlist-select" size="5">
                 <option>No tracks loaded</option>
@@ -613,6 +638,179 @@
         <div class="help-content" style="max-width: 800px; max-height: 80vh; overflow-y: auto;">
             <h2>🎮 Complete Gesture Guide</h2>
             
+            <div class="help-section">
+                <h3>🎵 Audio Effects Control</h3>
+                <div class="help-shortcut">
+                    <span>Hand Y Position</span>
+                    <span>→ Filter Frequency (Low to High)</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Hand Spread</span>
+                    <span>→ Filter Resonance (Q)</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Hand X Position</span>
+                    <span>→ Reverb Mix</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Hand Speed</span>
+                    <span>→ Delay Mix</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Thumb Height</span>
+                    <span>→ Low EQ Gain</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Index Height</span>
+                    <span>→ Mid EQ Gain</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Middle Height</span>
+                    <span>→ High EQ Gain</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>🎮 Music Control Gestures</h3>
+                <div class="help-shortcut">
+                    <span>Pinch</span>
+                    <span>→ Play/Pause + Filter Sweep</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Point Left</span>
+                    <span>→ Previous Track</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Point Right</span>
+                    <span>→ Next Track</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Thumbs Up</span>
+                    <span>→ Volume Up + Filter Sweep Up</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Thumbs Down</span>
+                    <span>→ Volume Down + Filter Sweep Down</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Victory (V)</span>
+                    <span>→ Toggle Loop</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>OK Sign</span>
+                    <span>→ Toggle Mute</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Hands Touching</span>
+                    <span>→ Seek Forward</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Hands Crossing</span>
+                    <span>→ Seek Backward</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>👋 Left Hand Swipe Gestures</h3>
+                <div class="help-shortcut">
+                    <span>Swipe Left → Right</span>
+                    <span>→ Next Track</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Swipe Right → Left</span>
+                    <span>→ Previous Track</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>🔄 Left Hand Rotation Gestures</h3>
+                <div class="help-shortcut">
+                    <span>Rotate Clockwise</span>
+                    <span>→ Seek Forward 10s</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Rotate Counter-Clockwise</span>
+                    <span>→ Seek Backward 10s</span>
+                </div>
+            </div>
+
+            <div class="help-section">
+                <h3>🎛️ Hand Position Controls</h3>
+                <div class="help-shortcut">
+                    <span>Hand Height (Y)</span>
+                    <span>→ Bass Boost (Lower = More Bass)</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Hand Position (X)</span>
+                    <span>→ Filter Frequency (Right = Brighter)</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Hand Spread</span>
+                    <span>→ Reverb Mix (Wider = More Reverb)</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Hand Speed</span>
+                    <span>→ Delay Mix (Faster = More Delay)</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Index Finger Height</span>
+                    <span>→ Mid EQ</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Middle Finger Height</span>
+                    <span>→ High EQ</span>
+                </div>
+            </div>
+            </div>
+
+            <div class="help-section">
+                <h3>🎨 Effect Gestures</h3>
+                <div class="help-shortcut">
+                    <span>Rock</span>
+                    <span>→ Thunder + Bass Drop</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Paper</span>
+                    <span>→ Reverb Burst</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Scissors</span>
+                    <span>→ Laser Sound</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Peace</span>
+                    <span>→ Delay Ping (C5)</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Spock</span>
+                    <span>→ Whoosh Effect</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Gun</span>
+                    <span>→ Laser Shot</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Claw</span>
+                    <span>→ Thunder + Explosion</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Love</span>
+                    <span>→ Reverb Burst (Pink)</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Holy</span>
+                    <span>→ Delay Ping (A4)</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Three Fingers</span>
+                    <span>→ Reverb Burst</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Four Fingers</span>
+                    <span>→ Whoosh Effect</span>
+                </div>
+            </div>
+
             <div class="help-section">
                 <h3>⚡ Basic Gestures</h3>
                 <div class="help-shortcut">
@@ -701,11 +899,15 @@
                 <h3>☝️ Pointing Gestures</h3>
                 <div class="help-shortcut">
                     <span>Point Up</span>
-                    <span>→ Index only upward</span>
+                    <span>→ Index only upward (Prev Track)</span>
+                </div>
+                <div class="help-shortcut">
+                    <span>Point Left</span>
+                    <span>→ Index only leftward (Prev Track)</span>
                 </div>
                 <div class="help-shortcut">
                     <span>Point Right</span>
-                    <span>→ Index only rightward</span>
+                    <span>→ Index only rightward (Next Track)</span>
                 </div>
             </div>
 
@@ -744,6 +946,10 @@
                     <span>→ Reset Effects</span>
                 </div>
                 <div class="help-shortcut">
+                    <span class="help-key">E</span>
+                    <span>→ Reset Audio Effects</span>
+                </div>
+                <div class="help-shortcut">
                     <span class="help-key">H</span>
                     <span>→ Show This Help</span>
                 </div>
@@ -768,7 +974,10 @@
                     <li>✅ Particles and haptics confirm gesture recognition</li>
                     <li>✅ Two-hand gestures work when both hands are detected</li>
                     <li>✅ See GESTURES.md for detailed documentation</li>
-                    <li>Load tracks in Settings, then use pinch, point, thumbs, OK, victory, and two-hand gestures for playback control</li>
+                    <li>✅ Swipe left hand right for next track, left for previous track</li>
+                    <li>✅ Rotate left palm clockwise to seek forward, counter-clockwise to seek back</li>
+                    <li>✅ Lower your hand for more bass, raise it for less bass - watch the palm indicator</li>
+                    <li>✅ Move hand right for brighter sound, left for warmer sound</li>
                 </ul>
             </div>
         </div>
@@ -833,6 +1042,8 @@ let settings = {
     handSmoothing: 0.7,
     perfMonitorEnabled: false,
     fingerNotesEnabled: true,
+    audioEffectsEnabled: true,
+    audioVisEnabled: true,
     isMobileMode: /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
 };
 
@@ -872,11 +1083,44 @@ let humOsc = null;
 let humGain = null;
 let audioMasterGain = null;
 
+// Real-time Audio Effects Nodes
+let audioSource = null;
+let audioAnalyser = null;
+let audioFilter = null;
+let audioReverb = null;
+let audioDelay = null;
+let audioDelayGain = null;
+let audioCompressor = null;
+let audioEQ = {
+    low: null,
+    mid: null,
+    high: null
+};
+
+// Audio Effect Parameters (controlled by gestures)
+let audioEffects = {
+    filterFrequency: 1000,      // Controlled by hand Y position
+    filterQ: 1,                  // Controlled by hand spread
+    reverbMix: 0,               // Controlled by hand distance
+    delayTime: 0.3,             // Controlled by hand rotation
+    delayMix: 0,               // Controlled by hand speed
+    lowGain: 0,                // Controlled by thumb position
+    midGain: 0,                // Controlled by index position
+    highGain: 0                // Controlled by middle position
+};
+
+// Audio visualization data
+let audioFrequencyData = null;
+let audioTimeData = null;
+
 // UI Elements
 const uiHands = document.getElementById('ui-hands');
 const uiFps = document.getElementById('ui-fps');
 const uiGesture = document.getElementById('ui-gesture');
 const uiSpread = document.getElementById('ui-spread');
+const uiFilter = document.getElementById('ui-filter');
+const uiReverb = document.getElementById('ui-reverb');
+const uiDelay = document.getElementById('ui-delay');
 const uiTrack = document.getElementById('ui-track');
 const uiPlayback = document.getElementById('ui-playback');
 const uiVolume = document.getElementById('ui-volume');
@@ -900,9 +1144,9 @@ let lastMusicActionTime = {};
 const MUSIC_ACTION_COOLDOWN = 900;
 const SEEK_STEP_SECONDS = 10;
 const bundledTracks = [
-    { name: 'Neon Pulse (Demo)', url: 'tracks/neon-pulse.wav', source: 'bundled' },
-    { name: 'Gesture Drift (Demo)', url: 'tracks/gesture-drift.wav', source: 'bundled' },
-    { name: 'Aura Loop (Demo)', url: 'tracks/aura-loop.wav', source: 'bundled' }
+    { name: 'Drugs You Should Try It', url: 'tracks/Travis-Scott-Drugs-You-Should-Try-It-(HipHopKit.com).mp3', source: 'bundled' },
+    { name: 'Mamacita', url: 'tracks/Travis-Scott-Mamacita-Ft-Rich-Homie-Quan-Young-Thug-(HipHopKit.com).mp3', source: 'bundled' },
+    { name: 'Quintana Pt 2', url: 'tracks/Travis-Scott-Quintana-Pt-2-(HipHopKit.com).mp3', source: 'bundled' }
 ];
 
 function clamp(value, min, max) {
@@ -1148,9 +1392,18 @@ function runMusicAction(actionKey, callback, cooldown = MUSIC_ACTION_COOLDOWN) {
 }
 
 function handleGestureMusicAction(handIdx, gestureKey, callback) {
-    // Only trigger if gesture just changed (was null before)
+    // Check cooldown first
+    const now = performance.now();
+    if (now - (lastMusicActionTime[gestureKey] || 0) < MUSIC_ACTION_COOLDOWN) {
+        return false;
+    }
+
+    // Only trigger if gesture just changed (was null before) OR cooldown has passed
     if (lastDetectedGesture[handIdx] === gestureKey) {
-        return false; // Gesture hasn't changed, don't trigger
+        // Gesture hasn't changed, but check if enough time has passed since last trigger
+        if (now - (lastMusicActionTime[gestureKey] || 0) < MUSIC_ACTION_COOLDOWN * 2) {
+            return false;
+        }
     }
 
     return runMusicAction(gestureKey, callback);
@@ -1184,25 +1437,77 @@ window.addEventListener('resize', resize);
 resize();
 
 /**
- * HAND SMOOTHING (KALMAN-LIKE FILTER)
+ * HAND SMOOTHING (ENHANCED KALMAN-LIKE FILTER)
  */
-function smoothLandmarks(hand, handIndex, alpha = settings.handSmoothing) {
-    if (!smoothedHands[handIndex]) {
-        smoothedHands[handIndex] = hand;
-        return hand;
+class HandSmoother {
+    constructor(alpha = 0.7) {
+        this.alpha = alpha;
+        this.velocityAlpha = 0.3;
+        this.position = null;
+        this.velocity = null;
+        this.prediction = null;
     }
-    
-    const smoothed = hand.map((point, idx) => {
-        const prev = smoothedHands[handIndex][idx];
-        return {
-            x: prev.x * alpha + point.x * (1 - alpha),
-            y: prev.y * alpha + point.y * (1 - alpha),
-            z: prev.z * alpha + point.z * (1 - alpha)
+
+    update(point, dt = 0.016) {
+        if (!this.position) {
+            this.position = { x: point.x, y: point.y, z: point.z };
+            this.velocity = { x: 0, y: 0, z: 0 };
+            return this.position;
+        }
+
+        // Calculate measured velocity
+        const measuredVelocity = {
+            x: (point.x - this.position.x) / dt,
+            y: (point.y - this.position.y) / dt,
+            z: (point.z - this.position.z) / dt
         };
+
+        // Smooth velocity
+        this.velocity = {
+            x: this.velocity.x * this.velocityAlpha + measuredVelocity.x * (1 - this.velocityAlpha),
+            y: this.velocity.y * this.velocityAlpha + measuredVelocity.y * (1 - this.velocityAlpha),
+            z: this.velocity.z * this.velocityAlpha + measuredVelocity.z * (1 - this.velocityAlpha)
+        };
+
+        // Predict next position
+        this.prediction = {
+            x: this.position.x + this.velocity.x * dt,
+            y: this.position.y + this.velocity.y * dt,
+            z: this.position.z + this.velocity.z * dt
+        };
+
+        // Blend prediction with measurement
+        this.position = {
+            x: this.prediction.x * this.alpha + point.x * (1 - this.alpha),
+            y: this.prediction.y * this.alpha + point.y * (1 - this.alpha),
+            z: this.prediction.z * this.alpha + point.z * (1 - this.alpha)
+        };
+
+        return this.position;
+    }
+
+    reset() {
+        this.position = null;
+        this.velocity = null;
+        this.prediction = null;
+    }
+}
+
+// Initialize smoothers for each hand
+let handSmoothers = [new HandSmoother(settings.handSmoothing), new HandSmoother(settings.handSmoothing)];
+
+function smoothLandmarks(hand, handIndex) {
+    const smoother = handSmoothers[handIndex];
+    smoother.alpha = settings.handSmoothing;
+
+    return hand.map((point) => {
+        const smoothed = smoother.update(point);
+        return { x: smoothed.x, y: smoothed.y, z: smoothed.z };
     });
-    
-    smoothedHands[handIndex] = smoothed;
-    return smoothed;
+}
+
+function resetHandSmoothing() {
+    handSmoothers.forEach(smoother => smoother.reset());
 }
 
 /**
@@ -1210,28 +1515,28 @@ function smoothLandmarks(hand, handIndex, alpha = settings.handSmoothing) {
  */
 function drawTrails() {
     if (!settings.trailsEnabled) return;
-    
+
     currentHands.forEach((hand, handIdx) => {
         const tipPos = mapToCanvas(hand[8]); // Index finger tip
-        
+
         if (!handTrails[handIdx]) handTrails[handIdx] = [];
         handTrails[handIdx].push(tipPos);
-        
+
         if (handTrails[handIdx].length > settings.trailLength) {
             handTrails[handIdx].shift();
         }
-        
+
         // Draw trail with gradient
         trailCtx.strokeStyle = themes[currentTheme](time, handIdx, 2);
         trailCtx.lineWidth = 2;
         trailCtx.lineCap = 'round';
         trailCtx.lineJoin = 'round';
-        
+
         for (let i = 0; i < handTrails[handIdx].length - 1; i++) {
             const p1 = handTrails[handIdx][i];
             const p2 = handTrails[handIdx][i + 1];
             const opacity = i / handTrails[handIdx].length;
-            
+
             trailCtx.globalAlpha = opacity * 0.5;
             trailCtx.beginPath();
             trailCtx.moveTo(p1.x, p1.y);
@@ -1276,24 +1581,24 @@ function detectPinch(hand) {
     const index = hand[8];
     const distance = getDist(thumb, index);
     // Pinch threshold: thumb and index tips very close together
-    return distance < 0.06;
+    return distance < 0.05;
 }
 
 function detectPeaceSign(hand) {
-    const indexExtended = getDist(hand[8], hand[6]) > 0.08;
-    const middleExtended = getDist(hand[12], hand[10]) > 0.08;
-    const ringClosed = getDist(hand[16], hand[14]) < 0.05;
-    const pinkyClosed = getDist(hand[20], hand[18]) < 0.05;
-    
+    const indexExtended = getDist(hand[8], hand[6]) > 0.07;
+    const middleExtended = getDist(hand[12], hand[10]) > 0.07;
+    const ringClosed = getDist(hand[16], hand[14]) < 0.06;
+    const pinkyClosed = getDist(hand[20], hand[18]) < 0.06;
+
     return indexExtended && middleExtended && ringClosed && pinkyClosed;
 }
 
 function detectThumbsUp(hand) {
-    const thumbUp = hand[4].y < hand[2].y;
-    const fingersClosed = FINGER_TIPS.slice(1).every(idx => 
+    const thumbUp = hand[4].y < hand[2].y - 0.05;
+    const fingersClosed = FINGER_TIPS.slice(1).every(idx =>
         getDist(hand[idx], hand[0]) < 0.15
     );
-    
+
     return thumbUp && fingersClosed;
 }
 
@@ -1362,8 +1667,20 @@ function detectPointingRight(hand) {
     const pinkyClosed = getDist(hand[20], hand[18]) < 0.08;
     const thumbClose = getDist(hand[4], hand[2]) < 0.1;
     const indexToRight = hand[8].x > hand[0].x + 0.15; // Extended to the right
-    
+
     return indexExt && middleClosed && ringClosed && pinkyClosed && thumbClose && indexToRight;
+}
+
+function detectPointingLeft(hand) {
+    // Only index finger extended to the left
+    const indexExt = getDist(hand[8], hand[6]) > 0.1;
+    const middleClosed = getDist(hand[12], hand[10]) < 0.08;
+    const ringClosed = getDist(hand[16], hand[14]) < 0.08;
+    const pinkyClosed = getDist(hand[20], hand[18]) < 0.08;
+    const thumbClose = getDist(hand[4], hand[2]) < 0.1;
+    const indexToLeft = hand[8].x < hand[0].x - 0.15; // Extended to the left
+
+    return indexExt && middleClosed && ringClosed && pinkyClosed && thumbClose && indexToLeft;
 }
 
 function detectOKSign(hand) {
@@ -1480,16 +1797,16 @@ function detectSpock(hand) {
 
 function detectHandTilt(hand, previousHand) {
     if (!previousHand) return null;
-    
+
     const palmMovement = getDist(hand[0], previousHand[0]);
     const thumbMovement = getDist(hand[4], previousHand[4]);
-    
+
     if (palmMovement < 0.01) return null; // No significant movement
-    
+
     // Determine tilt direction
     const tiltX = hand[0].x - previousHand[0].x;
     const tiltY = hand[0].y - previousHand[0].y;
-    
+
     if (Math.abs(tiltX) > Math.abs(tiltY)) {
         return tiltX > 0 ? 'RIGHT' : 'LEFT';
     } else {
@@ -1497,10 +1814,33 @@ function detectHandTilt(hand, previousHand) {
     }
 }
 
+// Swipe detection for left hand
+let swipeVelocity = [0, 0]; // Track velocity for each hand
+const SWIPE_THRESHOLD = 0.15; // Minimum velocity for swipe
+
+function detectSwipe(hand, handIdx) {
+    if (!previousHands[handIdx]) return null;
+
+    const currentX = hand[0].x;
+    const currentY = hand[0].y;
+    const prevX = previousHands[handIdx][0].x;
+    const prevY = previousHands[handIdx][0].y;
+
+    const deltaX = currentX - prevX;
+    const deltaY = currentY - prevY;
+
+    // Check for horizontal swipe
+    if (Math.abs(deltaX) > Math.abs(deltaY) && Math.abs(deltaX) > SWIPE_THRESHOLD) {
+        return deltaX > 0 ? 'RIGHT' : 'LEFT';
+    }
+
+    return null;
+}
+
 function detectHandSize(hand) {
     // Measure hand size by distance from wrist to middle finger
     const handSize = getDist(hand[0], hand[12]);
-    
+
     if (handSize < 0.15) return 'SMALL';
     if (handSize < 0.25) return 'MEDIUM';
     return 'LARGE';
@@ -1583,6 +1923,28 @@ function resetEffects() {
     lightningBolts = [];
     explosions = [];
     handTrails = [[], []];
+
+    // Reset audio effects to defaults
+    if (audioCtx) {
+        audioEffects.filterFrequency = 1000;
+        audioEffects.filterQ = 1;
+        audioEffects.reverbMix = 0;
+        audioEffects.delayMix = 0;
+        audioEffects.lowGain = 0;
+        audioEffects.midGain = 0;
+        audioEffects.highGain = 0;
+
+        if (audioFilter) {
+            audioFilter.frequency.value = 1000;
+            audioFilter.Q.value = 1;
+        }
+        if (audioDelayGain) {
+            audioDelayGain.gain.value = 0;
+        }
+        if (audioEQ.low) audioEQ.low.gain.value = 0;
+        if (audioEQ.mid) audioEQ.mid.gain.value = 0;
+        if (audioEQ.high) audioEQ.high.gain.value = 0;
+    }
 }
 
 function toggleMobileMode() {
@@ -1592,7 +1954,7 @@ function toggleMobileMode() {
 
 document.addEventListener('keydown', (e) => {
     const key = e.key.toLowerCase();
-    
+
     if (key === 'f') {
         e.preventDefault();
         toggleFullscreen();
@@ -1611,6 +1973,29 @@ document.addEventListener('keydown', (e) => {
     } else if (key === 'r') {
         e.preventDefault();
         resetEffects();
+    } else if (key === 'e') {
+        e.preventDefault();
+        // Reset audio effects only
+        if (audioCtx) {
+            audioEffects.filterFrequency = 1000;
+            audioEffects.filterQ = 1;
+            audioEffects.reverbMix = 0;
+            audioEffects.delayMix = 0;
+            audioEffects.lowGain = 0;
+            audioEffects.midGain = 0;
+            audioEffects.highGain = 0;
+
+            if (audioFilter) {
+                audioFilter.frequency.value = 1000;
+                audioFilter.Q.value = 1;
+            }
+            if (audioDelayGain) {
+                audioDelayGain.gain.value = 0;
+            }
+            if (audioEQ.low) audioEQ.low.gain.value = 0;
+            if (audioEQ.mid) audioEQ.mid.gain.value = 0;
+            if (audioEQ.high) audioEQ.high.gain.value = 0;
+        }
     } else if (key === 'm') {
         e.preventDefault();
         toggleMobileMode();
@@ -1670,6 +2055,31 @@ prevTrackBtn?.addEventListener('click', () => changeTrack(-1));
 nextTrackBtn?.addEventListener('click', () => changeTrack(1));
 muteToggleBtn?.addEventListener('click', toggleMute);
 loopToggleBtn?.addEventListener('click', toggleLoopMode);
+
+document.getElementById('resetAudioEffectsBtn')?.addEventListener('click', () => {
+    if (audioCtx) {
+        audioEffects.filterFrequency = 1000;
+        audioEffects.filterQ = 1;
+        audioEffects.reverbMix = 0;
+        audioEffects.delayMix = 0;
+        audioEffects.lowGain = 0;
+        audioEffects.midGain = 0;
+        audioEffects.highGain = 0;
+
+        if (audioFilter) {
+            audioFilter.frequency.value = 1000;
+            audioFilter.Q.value = 1;
+        }
+        if (audioDelayGain) {
+            audioDelayGain.gain.value = 0;
+        }
+        if (audioEQ.low) audioEQ.low.gain.value = 0;
+        if (audioEQ.mid) audioEQ.mid.gain.value = 0;
+        if (audioEQ.high) audioEQ.high.gain.value = 0;
+    }
+});
+
+document.getElementById('resetAllEffectsBtn')?.addEventListener('click', resetEffects);
 
 musicPlayer.addEventListener('loadedmetadata', () => updatePlayerUI('Ready'));
 musicPlayer.addEventListener('timeupdate', () => updatePlayerUI(musicPlayer.paused ? 'Paused' : 'Playing'));
@@ -1831,43 +2241,200 @@ function initAudio() {
         audioMasterGain = audioCtx.createGain();
         audioMasterGain.gain.value = settings.audioVolume;
         audioMasterGain.connect(audioCtx.destination);
-        
+
         // Continuous Hum
         humOsc = audioCtx.createOscillator();
         humGain = audioCtx.createGain();
-        
+
         humOsc.type = 'sine';
         humOsc.frequency.value = 100;
-        
+
         humGain.gain.value = 0; // Mute until hands are seen
-        
+
         humOsc.connect(humGain);
         humGain.connect(audioMasterGain);
         humOsc.start();
-        
+
         // Initialize finger note oscillators
         initFingerNotes();
+
+        // Initialize real-time audio effects
+        initAudioEffects();
     } catch(e) {
         console.error("Web Audio API failed", e);
     }
+}
+
+function initAudioEffects() {
+    if (!audioCtx) return;
+
+    // Create analyser for visualization
+    audioAnalyser = audioCtx.createAnalyser();
+    audioAnalyser.fftSize = 2048;
+    audioAnalyser.smoothingTimeConstant = 0.8;
+    audioFrequencyData = new Uint8Array(audioAnalyser.frequencyBinCount);
+    audioTimeData = new Uint8Array(audioAnalyser.frequencyBinCount);
+
+    // Create filter (lowpass/bandpass)
+    audioFilter = audioCtx.createBiquadFilter();
+    audioFilter.type = 'lowpass';
+    audioFilter.frequency.value = audioEffects.filterFrequency;
+    audioFilter.Q.value = audioEffects.filterQ;
+
+    // Create reverb using convolver
+    audioReverb = audioCtx.createConvolver();
+    createReverbImpulse(2, 2); // 2 seconds reverb
+
+    // Create delay
+    audioDelay = audioCtx.createDelay(2);
+    audioDelay.delayTime.value = audioEffects.delayTime;
+    audioDelayGain = audioCtx.createGain();
+    audioDelayGain.gain.value = audioEffects.delayMix;
+
+    // Create EQ bands
+    audioEQ.low = audioCtx.createBiquadFilter();
+    audioEQ.low.type = 'lowshelf';
+    audioEQ.low.frequency.value = 320;
+    audioEQ.low.gain.value = audioEffects.lowGain;
+
+    audioEQ.mid = audioCtx.createBiquadFilter();
+    audioEQ.mid.type = 'peaking';
+    audioEQ.mid.frequency.value = 1000;
+    audioEQ.mid.Q.value = 0.5;
+    audioEQ.mid.gain.value = audioEffects.midGain;
+
+    audioEQ.high = audioCtx.createBiquadFilter();
+    audioEQ.high.type = 'highshelf';
+    audioEQ.high.frequency.value = 3200;
+    audioEQ.high.gain.value = audioEffects.highGain;
+
+    // Create compressor for better dynamics
+    audioCompressor = audioCtx.createDynamicsCompressor();
+    audioCompressor.threshold.value = -24;
+    audioCompressor.knee.value = 30;
+    audioCompressor.ratio.value = 12;
+    audioCompressor.attack.value = 0.003;
+    audioCompressor.release.value = 0.25;
+
+    // Connect music player through effects chain
+    setupAudioEffectsChain();
+}
+
+function createReverbImpulse(duration, decay) {
+    if (!audioCtx) return;
+
+    const sampleRate = audioCtx.sampleRate;
+    const length = sampleRate * duration;
+    const impulse = audioCtx.createBuffer(2, length, sampleRate);
+
+    for (let channel = 0; channel < 2; channel++) {
+        const channelData = impulse.getChannelData(channel);
+        for (let i = 0; i < length; i++) {
+            const n = i / length;
+            channelData[i] = (Math.random() * 2 - 1) * Math.pow(1 - n, decay);
+        }
+    }
+
+    audioReverb.buffer = impulse;
+}
+
+function setupAudioEffectsChain() {
+    if (!audioCtx || !musicPlayer) return;
+
+    // Create source from media element
+    if (!audioSource) {
+        audioSource = audioCtx.createMediaElementSource(musicPlayer);
+    }
+
+    // Build effects chain: Source -> EQ -> Filter -> Compressor -> Master
+    audioSource.connect(audioEQ.low);
+    audioEQ.low.connect(audioEQ.mid);
+    audioEQ.mid.connect(audioEQ.high);
+    audioEQ.high.connect(audioFilter);
+    audioFilter.connect(audioCompressor);
+    audioCompressor.connect(audioMasterGain);
+
+    // Connect to analyser for visualization
+    audioCompressor.connect(audioAnalyser);
+
+    // Connect reverb and delay in parallel
+    audioCompressor.connect(audioReverb);
+    audioReverb.connect(audioMasterGain);
+
+    audioCompressor.connect(audioDelay);
+    audioDelay.connect(audioDelayGain);
+    audioDelayGain.connect(audioMasterGain);
+}
+
+function updateAudioEffectsFromGestures(hands) {
+    if (!audioCtx || !hands || hands.length === 0 || !settings.audioEffectsEnabled) return;
+
+    const hand = hands[0]; // Use first hand for control
+
+    // Hand Y position controls bass boost (lower hand = more bass)
+    const handY = 1 - hand[0].y; // Invert so top is high
+    const bassBoost = (1 - handY) * 15; // 0 to +15dB bass
+    audioEffects.lowGain = bassBoost;
+    if (audioEQ && audioEQ.low) {
+        audioEQ.low.gain.setTargetAtTime(bassBoost, audioCtx.currentTime, 0.1);
+    }
+
+    // Hand X position controls filter frequency (right = brighter)
+    const handX = hand[0].x;
+    const targetFilterFreq = 200 + handX * 18000; // 200Hz to 18kHz
+    audioEffects.filterFrequency = targetFilterFreq;
+    if (audioFilter) {
+        audioFilter.frequency.setTargetAtTime(targetFilterFreq, audioCtx.currentTime, 0.1);
+    }
+
+    // Hand spread controls reverb mix (wider = more reverb)
+    const spread = getDist(hand[8], hand[20]);
+    const targetReverbMix = Math.min(spread * 0.8, 0.5); // 0 to 0.5
+    audioEffects.reverbMix = targetReverbMix;
+    if (audioReverb) {
+        // Reverb mix is controlled by gain node
+        const reverbGain = audioCtx.createGain();
+        reverbGain.gain.value = targetReverbMix;
+    }
+
+    // Hand speed controls delay mix
+    if (handSmoothers[0] && handSmoothers[0].velocity) {
+        const speed = Math.abs(handSmoothers[0].velocity.x) + Math.abs(handSmoothers[0].velocity.y);
+        const targetDelayMix = Math.min(speed * 2, 0.4); // 0 to 0.4
+        audioEffects.delayMix = targetDelayMix;
+        if (audioDelayGain) {
+            audioDelayGain.gain.setTargetAtTime(targetDelayMix, audioCtx.currentTime, 0.1);
+        }
+    }
+
+    // Finger positions control mid/high EQ
+    const indexY = 1 - hand[8].y;
+    const middleY = 1 - hand[12].y;
+
+    audioEffects.midGain = (indexY - 0.5) * 8; // -4dB to +4dB
+    audioEffects.highGain = (middleY - 0.5) * 8; // -4dB to +4dB
+
+    if (audioEQ.low) audioEQ.low.gain.setTargetAtTime(audioEffects.lowGain, audioCtx.currentTime, 0.1);
+    if (audioEQ.mid) audioEQ.mid.gain.setTargetAtTime(audioEffects.midGain, audioCtx.currentTime, 0.1);
+    if (audioEQ.high) audioEQ.high.gain.setTargetAtTime(audioEffects.highGain, audioCtx.currentTime, 0.1);
 }
 
 function triggerZap() {
     if (!audioCtx) return;
     const osc = audioCtx.createOscillator();
     const gainNode = audioCtx.createGain();
-    
+
     // Zap sound profile
     osc.type = 'sawtooth';
     osc.frequency.setValueAtTime(800, audioCtx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
-    
+
     gainNode.gain.setValueAtTime(0.5, audioCtx.currentTime);
     gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.1);
-    
+
     osc.connect(gainNode);
     gainNode.connect(audioMasterGain || audioCtx.destination);
-    
+
     osc.start();
     osc.stop(audioCtx.currentTime + 0.15);
 }
@@ -1875,7 +2442,7 @@ function triggerZap() {
 function triggerThunder() {
     if (!audioCtx) return;
     const now = audioCtx.currentTime;
-    
+
     // Deep rumble
     const rumble = audioCtx.createOscillator();
     const rumbleGain = audioCtx.createGain();
@@ -1883,12 +2450,12 @@ function triggerThunder() {
     rumble.frequency.value = 40;
     rumbleGain.gain.setValueAtTime(0.3, now);
     rumbleGain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
-    
+
     rumble.connect(rumbleGain);
     rumbleGain.connect(audioMasterGain || audioCtx.destination);
     rumble.start(now);
     rumble.stop(now + 0.6);
-    
+
     // High-pitched crack
     const crack = audioCtx.createOscillator();
     const crackGain = audioCtx.createGain();
@@ -1897,11 +2464,173 @@ function triggerThunder() {
     crack.frequency.exponentialRampToValueAtTime(80, now + 0.2);
     crackGain.gain.setValueAtTime(0.5, now);
     crackGain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
-    
+
     crack.connect(crackGain);
     crackGain.connect(audioMasterGain || audioCtx.destination);
     crack.start(now);
     crack.stop(now + 0.2);
+}
+
+// New: Trigger filter sweep effect
+function triggerFilterSweep(direction = 'up') {
+    if (!audioCtx || !audioFilter) return;
+
+    const now = audioCtx.currentTime;
+    const startFreq = audioFilter.frequency.value;
+    const endFreq = direction === 'up' ? 8000 : 200;
+
+    audioFilter.frequency.setValueAtTime(startFreq, now);
+    audioFilter.frequency.exponentialRampToValueAtTime(endFreq, now + 0.3);
+    audioFilter.frequency.exponentialRampToValueAtTime(startFreq, now + 0.6);
+}
+
+// New: Trigger reverb burst
+function triggerReverbBurst(intensity = 0.5) {
+    if (!audioCtx) return;
+
+    const now = audioCtx.currentTime;
+    const noise = audioCtx.createBufferSource();
+    const bufferSize = audioCtx.sampleRate * 0.5;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (bufferSize * 0.1));
+    }
+
+    noise.buffer = buffer;
+
+    const noiseGain = audioCtx.createGain();
+    noiseGain.gain.setValueAtTime(intensity, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+    noise.connect(noiseGain);
+    noiseGain.connect(audioMasterGain);
+
+    noise.start(now);
+    noise.stop(now + 0.5);
+}
+
+// New: Trigger delay ping
+function triggerDelayPing(frequency = 440) {
+    if (!audioCtx) return;
+
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sine';
+    osc.frequency.value = frequency;
+
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+    osc.connect(gain);
+    gain.connect(audioMasterGain);
+
+    osc.start(now);
+    osc.stop(now + 0.5);
+}
+
+// New: Trigger bass drop
+function triggerBassDrop() {
+    if (!audioCtx) return;
+
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(200, now);
+    osc.frequency.exponentialRampToValueAtTime(30, now + 0.5);
+
+    gain.gain.setValueAtTime(0.4, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.5);
+
+    osc.connect(gain);
+    gain.connect(audioMasterGain);
+
+    osc.start(now);
+    osc.stop(now + 0.5);
+}
+
+// New: Trigger laser sound
+function triggerLaser() {
+    if (!audioCtx) return;
+
+    const now = audioCtx.currentTime;
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(1500, now);
+    osc.frequency.exponentialRampToValueAtTime(100, now + 0.2);
+
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+    osc.connect(gain);
+    gain.connect(audioMasterGain);
+
+    osc.start(now);
+    osc.stop(now + 0.2);
+}
+
+// New: Trigger whoosh effect
+function triggerWhoosh() {
+    if (!audioCtx) return;
+
+    const now = audioCtx.currentTime;
+    const bufferSize = audioCtx.sampleRate * 0.8;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    for (let i = 0; i < bufferSize; i++) {
+        const t = i / bufferSize;
+        data[i] = (Math.random() * 2 - 1) * Math.sin(t * Math.PI) * 0.5;
+    }
+
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buffer;
+
+    const filter = audioCtx.createBiquadFilter();
+    filter.type = 'bandpass';
+    filter.frequency.setValueAtTime(500, now);
+    filter.frequency.exponentialRampToValueAtTime(3000, now + 0.4);
+    filter.frequency.exponentialRampToValueAtTime(500, now + 0.8);
+
+    const gain = audioCtx.createGain();
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.8);
+
+    noise.connect(filter);
+    filter.connect(gain);
+    gain.connect(audioMasterGain);
+
+    noise.start(now);
+    noise.stop(now + 0.8);
+}
+
+function updateAudioEffectsUI() {
+    if (!uiFilter || !uiReverb || !uiDelay) return;
+
+    // Format filter frequency
+    const filterFreq = audioEffects.filterFrequency;
+    let filterText;
+    if (filterFreq >= 1000) {
+        filterText = `${(filterFreq / 1000).toFixed(1)}kHz`;
+    } else {
+        filterText = `${Math.round(filterFreq)}Hz`;
+    }
+    uiFilter.innerText = filterText;
+
+    // Format reverb mix
+    const reverbPct = Math.round(audioEffects.reverbMix * 200);
+    uiReverb.innerText = `${reverbPct}%`;
+
+    // Format delay mix
+    const delayPct = Math.round(audioEffects.delayMix * 250);
+    uiDelay.innerText = `${delayPct}%`;
 }
 
 function updateHum(activeHands) {
@@ -1917,11 +2646,11 @@ function updateHum(activeHands) {
     const dx = p1.x - p2.x;
     const dy = p1.y - p2.y;
     const dist = Math.sqrt(dx*dx + dy*dy);
-    
+
     // The closer they are, the higher the pitch and volume
     const targetFreq = 100 + (1 - Math.min(dist, 1)) * 300;
     const targetVolume = 0.05 + (1 - Math.min(dist, 1)) * 0.15;
-    
+
     humOsc.frequency.setTargetAtTime(targetFreq, audioCtx.currentTime, 0.1);
     humGain.gain.setTargetAtTime(targetVolume, audioCtx.currentTime, 0.1);
 }
@@ -2029,10 +2758,20 @@ function detectGesturesLegacy() {
             uiGesture.innerText = "☝️ POINT UP!";
             return;
         }
-        
+
         if (detectPointingRight(hand)) {
             triggerHaptic(20);
-            uiGesture.innerText = "👉 POINT RIGHT!";
+            uiGesture.innerText = "⏭️ NEXT TRACK!";
+            createParticles(handPos, '#00ff00', 8);
+            handleGestureMusicAction(idx, 'POINT_RIGHT', () => withLoadedTrack(() => changeTrack(1)));
+            return;
+        }
+
+        if (detectPointingLeft(hand)) {
+            triggerHaptic(20);
+            uiGesture.innerText = "⏮️ PREV TRACK!";
+            createParticles(handPos, '#ff0000', 8);
+            handleGestureMusicAction(idx, 'POINT_LEFT', () => withLoadedTrack(() => changeTrack(-1)));
             return;
         }
         
@@ -2190,13 +2929,14 @@ function detectGestures() {
                     y: (hand[4].y + hand[8].y) / 2
                 };
                 const pinchPos = mapToCanvas(midpoint);
-                // Enhanced: Pinch creates a focused lightning blast
-                createLightningBolt(pinchPos, { 
-                    x: pinchPos.x + 100, 
-                    y: pinchPos.y - 100 
+                // Enhanced: Pinch creates a focused lightning blast + filter sweep
+                createLightningBolt(pinchPos, {
+                    x: pinchPos.x + 100,
+                    y: pinchPos.y - 100
                 }, '#ff00ff', 3);
                 createShockwave(pinchPos, '#ff00ff');
                 triggerZap();
+                triggerFilterSweep('up');
                 triggerHaptic(30);
                 uiGesture.innerText = 'PINCH!';
                 createParticles(pinchPos, '#ff00ff', 8);
@@ -2204,35 +2944,38 @@ function detectGestures() {
             } else if (detectRockSign(hand)) {
                 matchedGesture = 'ROCK';
                 gestureTriggered = true;
-                // Enhanced: Thunder impact
+                // Enhanced: Thunder impact + bass drop
                 createThunderEffect(handPos, '#ffcc00');
                 createShockwave(handPos, '#ffaa00');
+                triggerBassDrop();
                 triggerHaptic(40);
                 uiGesture.innerText = 'ROCK!';
                 createParticles(handPos, '#ffaa00', 6);
             } else if (detectPaperSign(hand)) {
                 matchedGesture = 'PAPER';
                 gestureTriggered = true;
-                // Enhanced: Shockwave spread
+                // Enhanced: Shockwave spread + reverb burst
                 createParticles(handPos, glowColor, 12);
                 createShockwave(handPos, glowColor);
+                triggerReverbBurst(0.3);
                 triggerHaptic(25);
                 uiGesture.innerText = 'PAPER!';
             } else if (detectScissorsSign(hand)) {
                 matchedGesture = 'SCISSORS';
                 gestureTriggered = true;
-                // Enhanced: Twin lightning bolts
+                // Enhanced: Twin lightning bolts + laser sound
                 const indexPos = mapToCanvas(hand[8]);
                 const middlePos = mapToCanvas(hand[12]);
                 createLightningBolt(indexPos, { x: indexPos.x, y: indexPos.y - 250 }, '#00ffff', 2);
                 createLightningBolt(middlePos, { x: middlePos.x, y: middlePos.y - 250 }, '#00ffff', 2);
-                triggerZap();
+                triggerLaser();
                 triggerHaptic(35);
                 uiGesture.innerText = 'SCISSORS!';
             } else if (detectVictorySign(hand)) {
                 matchedGesture = 'VICTORY';
                 gestureTriggered = true;
                 createParticles(mapToCanvas(hand[8]), glowColor, 8);
+                triggerWhoosh();
                 triggerHaptic(45);
                 uiGesture.innerText = 'VICTORY!';
                 createShockwave(handPos, glowColor);
@@ -2240,20 +2983,21 @@ function detectGestures() {
             } else if (detectPeaceSign(hand)) {
                 matchedGesture = 'PEACE';
                 gestureTriggered = true;
-                // Enhanced: V-shaped peace energy
+                // Enhanced: V-shaped peace energy + delay ping
                 const indexPos = mapToCanvas(hand[8]);
                 const middlePos = mapToCanvas(hand[12]);
                 createLightningBolt(indexPos, middlePos, '#00ff00', 1);
                 createParticles(indexPos, '#00ff00', 5);
+                triggerDelayPing(523.25); // C5
                 triggerHaptic(30);
                 uiGesture.innerText = 'PEACE!';
             } else if (detectThumbsUp(hand)) {
                 matchedGesture = 'THUMBS_UP';
                 gestureTriggered = true;
-                // Enhanced: Upward energy burst
+                // Enhanced: Upward energy burst + filter sweep up
                 const thumbPos = mapToCanvas(hand[4]);
                 createElectricArc(thumbPos, -Math.PI / 2, '#00ff00');
-                triggerZap();
+                triggerFilterSweep('up');
                 triggerHaptic(50);
                 uiGesture.innerText = 'BOOST!';
                 createParticles(thumbPos, '#00ff00', 10);
@@ -2265,9 +3009,10 @@ function detectGestures() {
             } else if (detectThumbsDown(hand)) {
                 matchedGesture = 'THUMBS_DOWN';
                 gestureTriggered = true;
-                // Enhanced: Downward energy
+                // Enhanced: Downward energy + filter sweep down
                 const thumbPos = mapToCanvas(hand[4]);
                 createBlastWave(thumbPos, '#ff0000', 180);
+                triggerFilterSweep('down');
                 triggerHaptic(40);
                 uiGesture.innerText = 'DOWN!';
                 createParticles(thumbPos, '#ff0000', 7);
@@ -2279,128 +3024,111 @@ function detectGestures() {
             } else if (detectPointingUp(hand)) {
                 matchedGesture = 'POINT_UP';
                 gestureTriggered = true;
-                // Enhanced: Lightning pointing up
+                // Enhanced: Lightning pointing up + delay ping
                 const indexPos = mapToCanvas(hand[8]);
                 createLightningBolt(indexPos, { x: indexPos.x, y: indexPos.y - 200 }, '#00ffff', 2);
-                triggerZap();
+                triggerDelayPing(659.25); // E5
                 triggerHaptic(20);
-                uiGesture.innerText = 'POINT UP!';
+                uiGesture.innerText = '☝️ POINT UP!';
+                createParticles(indexPos, '#ffff00', 6);
                 handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => changeTrack(-1)));
             } else if (detectPointingRight(hand)) {
                 matchedGesture = 'POINT_RIGHT';
                 gestureTriggered = true;
-                // Enhanced: Lightning pointing right
+                // Enhanced: Lightning pointing right + delay ping
                 const indexPos = mapToCanvas(hand[8]);
                 createLightningBolt(indexPos, { x: indexPos.x + 200, y: indexPos.y }, '#00ffff', 2);
-                triggerZap();
+                triggerDelayPing(783.99); // G5
                 triggerHaptic(20);
-                uiGesture.innerText = 'POINT RIGHT!';
+                uiGesture.innerText = '⏭️ NEXT TRACK!';
+                createParticles(indexPos, '#00ff00', 8);
                 handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => changeTrack(1)));
+            } else if (detectPointingLeft(hand)) {
+                matchedGesture = 'POINT_LEFT';
+                gestureTriggered = true;
+                // Enhanced: Lightning pointing left + delay ping
+                const indexPos = mapToCanvas(hand[8]);
+                createLightningBolt(indexPos, { x: indexPos.x - 200, y: indexPos.y }, '#ff00ff', 2);
+                triggerDelayPing(587.33); // D5
+                triggerHaptic(20);
+                uiGesture.innerText = '⏮️ PREV TRACK!';
+                createParticles(indexPos, '#ff0000', 8);
+                handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(() => changeTrack(-1)));
             } else if (detectSpock(hand)) {
                 matchedGesture = 'SPOCK';
                 gestureTriggered = true;
-                // Enhanced: Electric arcs radiating outward
+                // Enhanced: Electric arcs radiating outward + whoosh
                 createElectricArc(handPos, time * 2, '#00ffff');
                 createParticles(handPos, '#00ffff', 15);
-                triggerZap();
+                triggerWhoosh();
                 triggerHaptic(60);
                 uiGesture.innerText = 'SPOCK!';
             } else if (detectGun(hand)) {
                 matchedGesture = 'GUN';
                 gestureTriggered = true;
-                // Enhanced: Lightning bolt from finger
+                // Enhanced: Lightning bolt from finger + laser
                 const fingerPos = mapToCanvas(hand[8]);
-                createLightningBolt(fingerPos, { 
-                    x: fingerPos.x + (Math.random() - 0.5) * 300, 
-                    y: fingerPos.y - 300 
+                createLightningBolt(fingerPos, {
+                    x: fingerPos.x + (Math.random() - 0.5) * 300,
+                    y: fingerPos.y - 300
                 }, '#ffff00', 3);
-                triggerZap();
+                triggerLaser();
                 triggerHaptic(45);
                 uiGesture.innerText = 'BANG!';
                 createShockwave(fingerPos, '#ff8800');
             } else if (detectClaw(hand)) {
                 matchedGesture = 'CLAW';
                 gestureTriggered = true;
-                // Enhanced: Blast wave explosion
+                // Enhanced: Blast wave explosion + thunder
                 createBlastWave(handPos, '#ff00ff', 250);
                 triggerThunder();
                 triggerHaptic(50);
                 uiGesture.innerText = 'CLAW!';
-            } else if (detectRockSign(hand)) {
-                matchedGesture = 'ROCK';
-                gestureTriggered = true;
-                // Enhanced: Thunder impact
-                createThunderEffect(handPos, '#ffcc00');
-                createShockwave(handPos, '#ffaa00');
-                triggerHaptic(40);
-                uiGesture.innerText = 'ROCK!';
-                createParticles(handPos, '#ffaa00', 6);
-            } else if (detectScissorsSign(hand)) {
-                matchedGesture = 'SCISSORS';
-                gestureTriggered = true;
-                // Enhanced: Twin lightning bolts
-                const indexPos = mapToCanvas(hand[8]);
-                const middlePos = mapToCanvas(hand[12]);
-                createLightningBolt(indexPos, { x: indexPos.x, y: indexPos.y - 250 }, '#00ffff', 2);
-                createLightningBolt(middlePos, { x: middlePos.x, y: middlePos.y - 250 }, '#00ffff', 2);
-                triggerZap();
-                triggerHaptic(35);
-                uiGesture.innerText = 'SCISSORS!';
-            } else if (detectVictorySign(hand)) {
-                matchedGesture = 'VICTORY';
-                gestureTriggered = true;
-                // Enhanced: Lightning arcs around fingers
-                const indexPos = mapToCanvas(hand[8]);
-                const middlePos = mapToCanvas(hand[12]);
-                createLightningBolt(indexPos, middlePos, '#00ff00', 2);
-                createLightningBolt(middlePos, indexPos, '#00ff00', 2);
-                createParticles(indexPos, '#00ff00', 8);
-                createParticles(middlePos, '#00ff00', 8);
-                triggerZap();
-                triggerHaptic(45);
-                uiGesture.innerText = 'VICTORY!';
-                createShockwave(handPos, '#00ff00');
-                handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(toggleLoopMode));
             } else if (detectLoveSign(hand)) {
                 matchedGesture = 'LOVE';
                 gestureTriggered = true;
-                // Enhanced: Pink heart explosion
+                // Enhanced: Pink heart explosion + reverb burst
                 createParticles(handPos, '#ff69b4', 15);
                 createShockwave(handPos, '#ff69b4');
+                triggerReverbBurst(0.5);
                 triggerHaptic(35);
                 uiGesture.innerText = 'LOVE!';
             } else if (detectHolySign(hand)) {
                 matchedGesture = 'HOLY';
                 gestureTriggered = true;
-                // Enhanced: Spiritual glow effect
+                // Enhanced: Spiritual glow effect + delay ping
                 const indexPos = mapToCanvas(hand[8]);
                 const middlePos = mapToCanvas(hand[12]);
                 createLightningBolt(indexPos, middlePos, '#ffff00', 1.5);
                 createParticles(handPos, '#ffff00', 10);
+                triggerDelayPing(440); // A4
                 triggerHaptic(40);
                 uiGesture.innerText = 'HOLY!';
             } else if (detectThreeFingers(hand)) {
                 matchedGesture = 'THREE';
                 gestureTriggered = true;
-                // Enhanced: Triple spark effect
+                // Enhanced: Triple spark effect + reverb burst
                 createParticles(handPos, glowColor, 9);
                 createShockwave(handPos, glowColor);
+                triggerReverbBurst(0.2);
                 triggerHaptic(30);
                 uiGesture.innerText = 'THREE!';
             } else if (detectFour(hand)) {
                 matchedGesture = 'FOUR';
                 gestureTriggered = true;
-                // Enhanced: Quad burst
+                // Enhanced: Quad burst + whoosh
                 createParticles(handPos, glowColor, 11);
                 createShockwave(handPos, glowColor);
+                triggerWhoosh();
                 triggerHaptic(35);
                 uiGesture.innerText = 'FOUR!';
             } else if (detectOKSign(hand)) {
                 matchedGesture = 'OK';
                 gestureTriggered = true;
-                // Enhanced: OK circle glow
+                // Enhanced: OK circle glow + delay ping
                 createParticles(mapToCanvas(hand[8]), glowColor, 3);
                 createShockwave(mapToCanvas(hand[8]), glowColor);
+                triggerDelayPing(349.23); // F4
                 triggerHaptic(25);
                 uiGesture.innerText = 'OK!';
                 handleGestureMusicAction(idx, matchedGesture, () => withLoadedTrack(toggleMute));
@@ -2415,18 +3143,54 @@ function detectGestures() {
         
         // Check hand dynamics if no primary gesture detected
         if (!gestureTriggered && previousHands[idx]) {
-            const tilt = detectHandTilt(hand, previousHands[idx]);
-            if (tilt) {
-                matchedGesture = `TILT_${tilt}`;
-                const tiltEmojis = { 'UP': '⬆️', 'DOWN': '⬇️', 'LEFT': '⬅️', 'RIGHT': '➡️' };
-                uiGesture.innerText = `${tiltEmojis[tilt]} ${tilt}`;
+            // Check for swipe on left hand (idx === 0)
+            if (idx === 0 && canDetectGesture(idx)) {
+                const swipe = detectSwipe(hand, idx);
+                if (swipe) {
+                    matchedGesture = `SWIPE_${swipe}`;
+                    const swipeEmojis = { 'LEFT': '⬅️', 'RIGHT': '➡️' };
+                    uiGesture.innerText = `${swipeEmojis[swipe]} SWIPE ${swipe}`;
+                    createParticles(handPos, swipe === 'RIGHT' ? '#00ff00' : '#ff0000', 10);
+                    triggerHaptic(30);
+
+                    if (swipe === 'RIGHT') {
+                        handleGestureMusicAction(idx, 'SWIPE_RIGHT', () => withLoadedTrack(() => changeTrack(1)));
+                    } else if (swipe === 'LEFT') {
+                        handleGestureMusicAction(idx, 'SWIPE_LEFT', () => withLoadedTrack(() => changeTrack(-1)));
+                    }
+                    markGestureDetected(idx);
+                    hasPrimaryGesture = true;
+                }
             }
 
-            const rotation = detectHandRotation(hand, previousHands[idx]);
-            if (rotation) {
-                matchedGesture = rotation;
-                const rotEmoji = rotation === 'CLOCKWISE' ? '🔄' : '🔃';
-                uiGesture.innerText = `${rotEmoji} ${rotation}`;
+            // Check for rotation on left hand (idx === 0)
+            if (idx === 0 && canDetectGesture(idx)) {
+                const rotation = detectHandRotation(hand, previousHands[idx]);
+                if (rotation) {
+                    matchedGesture = `ROTATE_${rotation}`;
+                    const rotEmoji = rotation === 'CLOCKWISE' ? '🔄' : '🔃';
+                    uiGesture.innerText = `${rotEmoji} ${rotation}`;
+                    createParticles(handPos, rotation === 'CLOCKWISE' ? '#00ffff' : '#ff00ff', 8);
+                    triggerHaptic(25);
+
+                    if (rotation === 'CLOCKWISE') {
+                        handleGestureMusicAction(idx, 'ROTATE_CLOCKWISE', () => withLoadedTrack(() => seekTrack(SEEK_STEP_SECONDS)));
+                    } else if (rotation === 'COUNTERCLOCKWISE') {
+                        handleGestureMusicAction(idx, 'ROTATE_COUNTER', () => withLoadedTrack(() => seekTrack(-SEEK_STEP_SECONDS)));
+                    }
+                    markGestureDetected(idx);
+                    hasPrimaryGesture = true;
+                }
+            }
+
+            // Fallback tilt detection for other hands
+            if (!hasPrimaryGesture) {
+                const tilt = detectHandTilt(hand, previousHands[idx]);
+                if (tilt) {
+                    matchedGesture = `TILT_${tilt}`;
+                    const tiltEmojis = { 'UP': '⬆️', 'DOWN': '⬇️', 'LEFT': '⬅️', 'RIGHT': '➡️' };
+                    uiGesture.innerText = `${tiltEmojis[tilt]} ${tilt}`;
+                }
             }
         }
 
@@ -2633,10 +3397,15 @@ function drawBackground() {
     bgCtx.fillRect(0, 0, width, height);
     bgCtx.globalCompositeOperation = 'source-over';
 
+    // Draw audio visualization if music is playing
+    if (settings.audioVisEnabled && audioAnalyser && !musicPlayer.paused && playlist.length > 0) {
+        drawAudioVisualization();
+    }
+
     // Matrix Rain Effect mapping to hand speed
     bgCtx.fillStyle = themes[currentTheme](time, 1, 1);
     bgCtx.font = fontSize + "px monospace";
-    
+
     // Matrix speed boosts when hands move fast
     let speedMult = 1 + (handVelocities * 100);
 
@@ -2646,13 +3415,63 @@ function drawBackground() {
             const char = String.fromCharCode(0x30A0 + Math.random() * 96);
             bgCtx.fillText(char, i * fontSize, matrixColumns[i] * fontSize);
         }
-        
+
         matrixColumns[i] += Math.random() * speedMult;
-        
+
         if (matrixColumns[i] * fontSize > height && Math.random() > 0.9) {
             matrixColumns[i] = 0;
         }
     }
+}
+
+function drawAudioVisualization() {
+    if (!audioAnalyser || !audioFrequencyData || !settings.audioVisEnabled) return;
+
+    // Get frequency data
+    audioAnalyser.getByteFrequencyData(audioFrequencyData);
+    audioAnalyser.getByteTimeDomainData(audioTimeData);
+
+    const barCount = 64;
+    const barWidth = width / barCount;
+    const step = Math.floor(audioFrequencyData.length / barCount);
+
+    // Draw frequency bars at bottom
+    for (let i = 0; i < barCount; i++) {
+        const value = audioFrequencyData[i * step];
+        const barHeight = (value / 255) * height * 0.3;
+        const x = i * barWidth;
+        const y = height - barHeight;
+
+        // Color based on frequency and theme
+        const hue = (i / barCount) * 360 + time * 50;
+        const color = `hsla(${hue}, 100%, 60%, 0.3)`;
+
+        bgCtx.fillStyle = color;
+        bgCtx.fillRect(x, y, barWidth - 2, barHeight);
+
+        // Add glow effect
+        bgCtx.shadowBlur = 10;
+        bgCtx.shadowColor = color;
+    }
+    bgCtx.shadowBlur = 0;
+
+    // Draw waveform in center
+    bgCtx.beginPath();
+    bgCtx.strokeStyle = `rgba(255, 255, 255, 0.2)`;
+    bgCtx.lineWidth = 2;
+
+    const waveStep = Math.floor(audioTimeData.length / width);
+    for (let i = 0; i < width; i++) {
+        const value = audioTimeData[i * waveStep];
+        const y = (value / 128) * height * 0.5 + height * 0.25;
+
+        if (i === 0) {
+            bgCtx.moveTo(i, y);
+        } else {
+            bgCtx.lineTo(i, y);
+        }
+    }
+    bgCtx.stroke();
 }
 
 function updatePhysics() {
@@ -2782,10 +3601,13 @@ function renderLoop(timestamp) {
 
     // Process Hand Logic if present
     if (currentHands.length > 0) {
-        
+
         // Apply hand smoothing
         currentHands = currentHands.map((hand, idx) => smoothLandmarks(hand, idx));
-        
+
+        // Update audio effects based on hand positions
+        updateAudioEffectsFromGestures(currentHands);
+
         // Draw Trails
         drawTrails();
         
@@ -2819,9 +3641,42 @@ function renderLoop(timestamp) {
                 }
             });
             ctx.shadowBlur = 0; // Reset
-            
+
             // Update finger notes audio
             updateFingerNotes(hand);
+
+            // Draw bass level indicator on palm
+            if (settings.audioEffectsEnabled && audioEffects.lowGain !== undefined) {
+                const wrist = mapToCanvas(hand[0]);
+                const middleBase = mapToCanvas(hand[9]);
+                const palmCenter = {
+                    x: (wrist.x + middleBase.x) / 2,
+                    y: (wrist.y + middleBase.y) / 2
+                };
+
+                const bassLevel = audioEffects.lowGain / 15; // Normalize 0-1
+                const indicatorRadius = 20 + bassLevel * 30;
+
+                ctx.save();
+                ctx.globalAlpha = 0.6;
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = bassLevel > 0.5 ? '#ff00ff' : '#00ffff';
+
+                // Draw bass indicator ring
+                ctx.beginPath();
+                ctx.arc(palmCenter.x, palmCenter.y, indicatorRadius, 0, Math.PI * 2);
+                ctx.strokeStyle = bassLevel > 0.5 ? '#ff00ff' : '#00ffff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // Draw inner fill based on bass level
+                ctx.beginPath();
+                ctx.arc(palmCenter.x, palmCenter.y, indicatorRadius * bassLevel, 0, Math.PI * 2);
+                ctx.fillStyle = bassLevel > 0.5 ? 'rgba(255, 0, 255, 0.3)' : 'rgba(0, 255, 255, 0.3)';
+                ctx.fill();
+
+                ctx.restore();
+            }
         });
 
         // 2. Cross-Hand Interactions (Lightning & Gradients)
@@ -2911,7 +3766,10 @@ function renderLoop(timestamp) {
         uiSpread.innerText = '0%';
         updateFingerNotes(null);
     }
-    
+
+    // Update audio effects UI
+    updateAudioEffectsUI();
+
     ctx.globalCompositeOperation = 'source-over'; // Restore
     
     // Update performance metrics
